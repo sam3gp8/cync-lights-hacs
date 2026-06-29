@@ -9,16 +9,28 @@ if TYPE_CHECKING:
 _user_homes: dict[int, UserHomes] = {}
 
 
+def _norm(user_id) -> int:
+    """Normalize user_id to int.
+
+    Without this, a caller that passes the raw REST API value (which may
+    arrive as a JSON string) and a caller that passes an explicitly-cast
+    int end up using different dict keys for the SAME user, and lookups
+    silently fail with "not found" even though the data is present.
+    """
+    return int(user_id)
+
+
 def get_user_homes(user_id: int):
     """Fetch a list of all configured homes for the user."""
 
-    current_homes = _user_homes.get(user_id, UserHomes([]))
+    current_homes = _user_homes.get(_norm(user_id), UserHomes([]))
     return current_homes.homes
 
 
 def get_home_by_id(user_id: int, home_id: int):
     """Fetch a home by the user and home ID."""
 
+    user_id = _norm(user_id)
     user_homes = _user_homes.get(user_id, UserHomes([])).homes
 
     found_home = next((home for home in user_homes if home.home_id == home_id), None)
@@ -30,6 +42,7 @@ def get_home_by_id(user_id: int, home_id: int):
 def set_user_homes(user_id: int, homes: list[CyncHome]):
     """Set a list of configured homes for the user."""
 
+    user_id = _norm(user_id)
     current_homes = _user_homes.get(user_id, UserHomes([]))
     current_homes.homes = homes
 
@@ -39,13 +52,14 @@ def set_user_homes(user_id: int, homes: list[CyncHome]):
 def get_user_device_callback(user_id: int):
     """Get the configured device update callback function for the user."""
 
-    current_homes = _user_homes.get(user_id, UserHomes([]))
+    current_homes = _user_homes.get(_norm(user_id), UserHomes([]))
     return current_homes.on_data_update
 
 
 def set_user_device_callback(user_id: int, callback: Callable):
     """Set the configured device update callback function for the user."""
 
+    user_id = _norm(user_id)
     current_homes = _user_homes.get(user_id, UserHomes([]))
     current_homes.on_data_update = callback
 
@@ -55,6 +69,7 @@ def set_user_device_callback(user_id: int, callback: Callable):
 def get_associated_home(user_id: int, device_id: int):
     """Get the home that the provided device id belongs to."""
 
+    user_id = _norm(user_id)
     user_homes = _user_homes.get(user_id, UserHomes([])).homes
 
     found_home = next((home for home in user_homes if home.contains_device_id(device_id)), None)
@@ -73,7 +88,7 @@ def get_associated_home_devices(user_id: int, device_id: int):
 def get_flattened_devices(user_id: int):
     """Returns a list of all devices that have been configured for the user, across all homes."""
 
-    homes = _user_homes.get(user_id, UserHomes([])).homes
+    homes = _user_homes.get(_norm(user_id), UserHomes([])).homes
     all_devices = []
 
     for home in homes:

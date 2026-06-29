@@ -49,7 +49,7 @@ class Auth:
             try:
                 user_info = await self._async_auth_user()
                 self._user = User(user_info["access_token"], user_info["refresh_token"], user_info["authorize"],
-                                  user_info["user_id"], expire_in=user_info["expire_in"])
+                                  int(user_info["user_id"]), expire_in=user_info["expire_in"])
                 return self._user
             except TwoFactorRequiredError:
                 two_factor_request = {'corp_id': GE_CORP_ID, 'email': self.username, 'local_lang': "en-us"}
@@ -60,7 +60,7 @@ class Auth:
         else:
             user_info = await self._async_auth_user_two_factor(two_factor_code)
             self._user = User(user_info["access_token"], user_info["refresh_token"], user_info["authorize"],
-                              user_info["user_id"], expire_in=user_info["expire_in"])
+                              int(user_info["user_id"]), expire_in=user_info["expire_in"])
             return self._user
 
     async def _async_auth_user(self):
