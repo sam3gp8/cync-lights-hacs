@@ -1,0 +1,11 @@
+{
+  "domain": "cync_lights",
+  "name": "Cync Lights",
+  "codeowners": ["@sam3gp8"],
+  "config_flow": true,
+  "documentation": "https://github.com/sam3gp8/cync-lights-hacs",
+  "issue_tracker": "https://github.com/sam3gp8/cync-lights-hacs/issues",
+  "iot_class": "cloud_push",
+  "requirements": ["aiohttp>=3.8.0"],
+  "version": "1.0.0"
+}

@@ -1,0 +1,29 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect your Cync account",
+        "description": "Enter the email and password you use for the GE / Savant Cync app.",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
+      "otp": {
+        "title": "Two-factor code",
+        "description": "Cync emailed you a one-time code. Enter it below.",
+        "data": {
+          "otp": "One-time code"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password.",
+      "invalid_otp": "That code didn't work. Check your email and try again.",
+      "cannot_connect": "Could not reach the Cync cloud. Please try again."
+    },
+    "abort": {
+      "already_configured": "This Cync account is already configured."
+    }
+  }
+}
