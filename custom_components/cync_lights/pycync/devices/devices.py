@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Tuple, Any
 
 from .controllable import CyncControllable
-from pycync.exceptions import UnsupportedCapabilityError
-from pycync.tcp.command_client import CommandClient
-from pycync.devices.capabilities import DEVICE_CAPABILITIES, CyncCapability
-from pycync.devices.device_types import DEVICE_TYPES, DeviceType
+from ..exceptions import UnsupportedCapabilityError
+from ..tcp.command_client import CommandClient
+from .capabilities import DEVICE_CAPABILITIES, CyncCapability
+from .device_types import DEVICE_TYPES, DeviceType
 
 
 def create_device(device_info: dict[str, Any], mesh_device_info: dict[str, Any], home_id: int,

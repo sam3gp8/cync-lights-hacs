@@ -1,3 +1,3 @@
-from pycync.auth import Auth, User
-from pycync.cync import Cync
-from pycync.devices import CyncDevice, CyncLight, CyncRoom, CyncGroup, CyncHome
+from .auth import Auth, User
+from .cync import Cync
+from .devices import CyncDevice, CyncLight, CyncRoom, CyncGroup, CyncHome

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Callable, TYPE_CHECKING
 
-from pycync.exceptions import CyncError
+from ..exceptions import CyncError
 
 if TYPE_CHECKING:
     from pycync.devices.groups import CyncHome

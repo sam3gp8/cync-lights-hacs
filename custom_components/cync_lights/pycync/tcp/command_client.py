@@ -13,11 +13,11 @@ import logging
 
 from .packet import MessageType, ParsedMessage, PipeCommandCode
 from .tcp_manager import TcpManager
-from pycync.devices.controllable import CyncControllable
-from pycync.exceptions import NoHubConnectedError, CyncError
-from pycync.devices.capabilities import CyncCapability
-from pycync.devices import device_storage
-from pycync.user import User
+from ..devices.controllable import CyncControllable
+from ..exceptions import NoHubConnectedError, CyncError
+from ..devices.capabilities import CyncCapability
+from ..devices import device_storage
+from ..user import User
 
 if TYPE_CHECKING:
     from pycync.devices import CyncDevice

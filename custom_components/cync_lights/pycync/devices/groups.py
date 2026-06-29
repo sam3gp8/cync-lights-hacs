@@ -5,10 +5,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from .controllable import CyncControllable
-from pycync.devices import CyncDevice
-from pycync.exceptions import UnsupportedCapabilityError
-from pycync.tcp.command_client import CommandClient
-from pycync.devices.capabilities import CyncCapability
+from . import CyncDevice
+from ..exceptions import UnsupportedCapabilityError
+from ..tcp.command_client import CommandClient
+from .capabilities import CyncCapability
 
 
 class GroupedCyncDevices(ABC):

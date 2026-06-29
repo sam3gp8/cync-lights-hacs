@@ -8,7 +8,7 @@ import struct
 from ..devices import device_storage
 from ..devices.device_types import DeviceType
 from .packet import ParsedMessage, ParsedInnerFrame, MessageType, PipeCommandCode, generate_checksum
-from pycync.devices.capabilities import DEVICE_CAPABILITIES, CyncCapability
+from ..devices.capabilities import DEVICE_CAPABILITIES, CyncCapability
 
 if TYPE_CHECKING:
     from pycync.devices import CyncDevice

@@ -19,7 +19,7 @@ import ssl
 import struct
 from typing import Callable
 
-from pycync import User
+from .. import User
 from . import packet_builder, packet_parser
 from .packet import MessageType
 

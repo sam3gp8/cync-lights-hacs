@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Protocol
 
-from pycync.devices.capabilities import CyncCapability
+from .capabilities import CyncCapability
 
 
 class CyncControllable(Protocol):

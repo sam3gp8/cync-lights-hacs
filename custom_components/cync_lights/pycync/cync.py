@@ -11,8 +11,8 @@ from .auth import Auth
 from .devices import create_device, CyncDevice, device_storage
 from .exceptions import MissingAuthError
 from .const import REST_API_BASE_URL
-from pycync.devices.groups import CyncRoom, CyncGroup, CyncHome
-from pycync.tcp.command_client import CommandClient
+from .devices.groups import CyncRoom, CyncGroup, CyncHome
+from .tcp.command_client import CommandClient
 
 
 class Cync:

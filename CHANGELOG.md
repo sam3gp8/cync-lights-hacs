@@ -2,6 +2,17 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.0.3] - 2026-06-29
+
+### Fixed
+- **Root cause of the recurring "Home ID not found on user account" error.** The traceback finally showed it plainly: the failing code was executing from `/usr/local/lib/python3.14/site-packages/pycync/...` — a real, separately-installed `pycync` package (almost certainly a dependency of Home Assistant's own official Cync integration), not our vendored copy at `custom_components/cync_lights/pycync/`.
+  - Every file inside our vendored `pycync/` used absolute imports internally (e.g. `from pycync.tcp.command_client import CommandClient`). Since `pycync` also exists as a real top-level package in this environment, Python's import resolver could bind those internal cross-references to the *other* package instead of a sibling file in our own copy.
+  - In practice this meant a device object built by *our* `Cync`/`Auth` classes could end up with a `_command_client` attribute that was an instance from the *real* package — which has its own separate, never-populated `device_storage`. Every command attempt failed because that module's home registry was empty for the user, regardless of how correct our own `device_storage` was.
+  - Converted all internal imports across `pycync/` (9 files: `__init__.py`, `cync.py`, `tcp/packet_parser.py`, `tcp/tcp_manager.py`, `tcp/command_client.py`, `devices/devices.py`, `devices/groups.py`, `devices/controllable.py`, `devices/device_storage.py`) to relative imports (`from .x import y` / `from ..x import y`), so the vendored copy can never resolve to anything other than itself, regardless of what else is installed in the environment.
+  - Verified in isolation: `device_storage` now resolves to the identical module object no matter which file inside the package imports it.
+
+The two previous attempts at this error (v1.0.1's `int()` cast fix) were real and worth keeping, but were treating a symptom — type mismatches inside *our own* `device_storage` — when the actual failures were happening inside a *different* `device_storage` entirely.
+
 ## [1.0.2] - 2026-06-29
 
 ### Added
