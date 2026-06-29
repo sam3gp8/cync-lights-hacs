@@ -18,6 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MIN_MIREDS, MAX_MIREDS
 from .coordinator import CyncCoordinator, CyncDeviceState
+from .pycync.devices.devices import CyncLight
 
 
 async def async_setup_entry(
@@ -115,18 +116,27 @@ class CyncLightEntity(CoordinatorEntity[CyncCoordinator], LightEntity):
         pd = self._state.pycync_dev
         self.coordinator.note_command(self._switch_id, True)
 
-        if ATTR_BRIGHTNESS in kwargs and self._state.supports_brightness:
+        is_light = isinstance(pd, CyncLight)
+        command_client = getattr(pd, "_command_client", None)
+
+        if ATTR_BRIGHTNESS in kwargs and self._state.supports_brightness and is_light:
             pct = max(1, min(100, round(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
             await pd.set_brightness(pct)
-        else:
+        elif is_light:
             await pd.turn_on()
+        elif command_client:
+            # Plain ON/OFF devices (e.g. type 52 WiFi switches) come back from
+            # pycync as a base CyncDevice, which has no turn_on()/turn_off().
+            # Every device carries a reference to the command client though,
+            # and set_power_state() accepts any CyncControllable.
+            await command_client.set_power_state(pd, True)
 
-        if ATTR_COLOR_TEMP_KELVIN in kwargs and self._state.supports_color_temp:
+        if ATTR_COLOR_TEMP_KELVIN in kwargs and self._state.supports_color_temp and is_light:
             mireds = round(1_000_000 / kwargs[ATTR_COLOR_TEMP_KELVIN])
             pct = max(1, min(100, round((MAX_MIREDS - mireds) / (MAX_MIREDS - MIN_MIREDS) * 100)))
             await pd.set_color_temp(pct)
 
-        if ATTR_RGB_COLOR in kwargs and self._state.supports_rgb:
+        if ATTR_RGB_COLOR in kwargs and self._state.supports_rgb and is_light:
             await pd.set_rgb(tuple(kwargs[ATTR_RGB_COLOR]))
 
         self._state.power = True
@@ -135,6 +145,13 @@ class CyncLightEntity(CoordinatorEntity[CyncCoordinator], LightEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         pd = self._state.pycync_dev
         self.coordinator.note_command(self._switch_id, False)
-        await pd.turn_off()
+
+        if isinstance(pd, CyncLight):
+            await pd.turn_off()
+        else:
+            command_client = getattr(pd, "_command_client", None)
+            if command_client:
+                await command_client.set_power_state(pd, False)
+
         self._state.power = False
         self.async_write_ha_state()

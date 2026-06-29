@@ -23,11 +23,7 @@ A native Home Assistant integration for GE / Savant **Cync** smart lights, plugs
 2. Click the **⋮** menu (top right) → **Custom repositories**.
 3. Add `https://github.com/sam3gp8/cync-lights-hacs` as an **Integration**.
 4. Find **Cync Lights** in HACS and click **Download**.
-5. Restart Home Assistant. 
-
-or
-
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sam3gp8&repository=cync-lights-hacs&category=Integration)
+5. Restart Home Assistant.
 
 ### Manual install
 
