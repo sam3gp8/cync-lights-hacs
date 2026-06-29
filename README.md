@@ -1,7 +1,6 @@
 # Cync Lights
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sam3gp8&repository=cync-lights-hacs&category=integration)
 [![GitHub Release](https://img.shields.io/github/v/release/sam3gp8/cync-lights-hacs)](https://github.com/sam3gp8/cync-lights-hacs/releases)
 [![License](https://img.shields.io/github/license/sam3gp8/cync-lights-hacs)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-donate-yellow.svg)](https://www.buymeacoffee.com/sam3gp8)
