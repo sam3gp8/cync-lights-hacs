@@ -46,6 +46,9 @@ class CyncLightEntity(CoordinatorEntity[CyncCoordinator], LightEntity):
     def __init__(self, coordinator: CyncCoordinator, switch_id: int) -> None:
         super().__init__(coordinator)
         self._switch_id = switch_id
+        # Fallback so a transient cache miss degrades to "unavailable"
+        # rather than raising KeyError out of a property.
+        self._fallback_state = coordinator.devices[switch_id]
 
         state = self._state
         self._attr_unique_id = f"cync_{switch_id}"
@@ -69,7 +72,9 @@ class CyncLightEntity(CoordinatorEntity[CyncCoordinator], LightEntity):
 
     @property
     def _state(self) -> CyncDeviceState:
-        return self.coordinator.devices[self._switch_id]
+        return self.coordinator.devices.get(
+            self._switch_id, self._fallback_state
+        )
 
     @property
     def name(self) -> str | None:
@@ -81,7 +86,7 @@ class CyncLightEntity(CoordinatorEntity[CyncCoordinator], LightEntity):
 
     @property
     def available(self) -> bool:
-        return self._state.online
+        return self.coordinator.last_update_success and self._state.online
 
     @property
     def brightness(self) -> int | None:

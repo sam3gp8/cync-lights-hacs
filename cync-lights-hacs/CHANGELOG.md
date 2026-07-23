@@ -2,6 +2,30 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.0.4] - 2026-06-29
+
+### Fixed
+- **Devices getting permanently stuck "unavailable", with no log output from the integration.** Several separate problems compounded here:
+  - **No periodic polling.** The coordinator was created with `update_interval=None` and an `async_refresh_states()` helper that was never actually scheduled — a leftover from the add-on conversion, where a `_refresh_loop()` task handled this. State therefore arrived *only* via pycync's push callback, with nothing to recover if that stopped.
+  - **No recovery after a dropped connection.** pycync reconnects its own TCP socket (`_read_task_finished` retries after 10s), but nothing re-syncs device state afterwards. Devices whose `is_online` flag flipped to `False` during the outage stayed `False` indefinitely, which is exactly what surfaces as a permanently unavailable entity. The coordinator now tracks when the cloud last pushed anything and rebuilds the entire connection if it has gone quiet for `STALE_PUSH_SECONDS` (5 minutes).
+  - **No token refresh.** `Cync.refresh_credentials()` existed but was never called, so an expiring access token would silently kill the connection. Now refreshed automatically when within 24 hours of expiry, and the new token is persisted back to the config entry.
+  - **Effectively no logging.** The only `_LOGGER` calls in the integration were exception handlers in the config flow, so a healthy-but-idle integration genuinely produced zero output — matching the reported "no activity even with a reload". pycync's own messages also log under the `pycync.*` logger namespace rather than `custom_components.cync_lights`, so filtering by this integration hid them. Connect, reconnect, device load, token refresh, per-device online/offline transitions, and poll cycles are now all logged.
+- Entities no longer raise `KeyError` out of a property if a device is briefly absent from the coordinator cache; they fall back to their last known state and read as unavailable instead. `_load_devices()` also now updates existing device records in place rather than clearing and rebuilding the dict, so entity references survive a reconnect.
+- `available` now also reflects coordinator health (`last_update_success`), so a dead cloud connection shows as unavailable rather than a stale on/off state.
+- Removed a stray `{pycync` directory that was being shipped inside `custom_components/cync_lights/` — an artifact of a `mkdir` brace-expansion that silently failed under `/bin/sh` when the package was first scaffolded.
+
+### Changed
+- Default poll interval is now 60s (was an unused 30s constant).
+
+To see the new diagnostics, add this to `configuration.yaml` and restart:
+
+```yaml
+logger:
+  logs:
+    custom_components.cync_lights: debug
+    pycync: info
+```
+
 ## [1.0.3] - 2026-06-29
 
 ### Fixed
