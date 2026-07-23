@@ -2,6 +2,13 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.0.5] - 2026-07-23
+
+### Fixed
+- **Manual install failed with a missing `manifest.json`.** The distributed zip was packaged with the *repository* at its root, so extracting it into `/config/custom_components/` produced `/config/custom_components/cync-lights-hacs/custom_components/cync_lights/manifest.json`. Home Assistant looks for `manifest.json` directly inside `/config/custom_components/<domain>/`, found a folder without one, and refused to load the integration. Releases now additionally ship an install-ready archive whose root **is** the `cync_lights` folder, so it extracts straight into `/config/custom_components/` with the correct depth.
+- Removed `aiohttp` from `manifest.json` `requirements`. It is bundled with Home Assistant core, and declaring it (with a version constraint, no less) makes HA attempt a pip resolution during setup — which can fail or conflict in constrained environments and prevent the integration from loading. Nothing about the code changes; `pycync` still imports `aiohttp` from core.
+- Normalized `manifest.json` key ordering to what `hassfest` expects (`domain`, `name`, then remaining keys alphabetically).
+
 ## [1.0.4] - 2026-06-29
 
 ### Fixed
