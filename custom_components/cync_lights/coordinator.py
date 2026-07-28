@@ -75,6 +75,11 @@ class CyncDeviceState:
     brightness: int = 0
     color_temp_kelvin: int = 0
     rgb: tuple[int, int, int] = (255, 255, 255)
+    # Diagnostics: monotonic timestamps of the last state change and the last
+    # time this device was reported online. Help pinpoint when/why a device
+    # dropped to unavailable.
+    last_change: float = 0.0
+    last_online: float = 0.0
 
 
 class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
@@ -100,6 +105,10 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
         # Monotonic timestamp of the last state push received from the cloud.
         self._last_push: float = time.monotonic()
         self._reconnecting = False
+        # Diagnostics counters.
+        self._reconnect_count: int = 0
+        self._connected_at: float = 0.0
+        self._last_reconnect_at: float = 0.0
 
     # -- Connection lifecycle ------------------------------------------------
 
@@ -148,6 +157,7 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
 
         self._load_devices()
         self._last_push = time.monotonic()
+        self._connected_at = time.monotonic()
         self._request_states()
 
         _LOGGER.info(
@@ -162,9 +172,13 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
             return
         self._reconnecting = True
         try:
+            self._reconnect_count += 1
+            self._last_reconnect_at = time.monotonic()
             _LOGGER.warning(
-                "No state received from Cync in %ds - rebuilding connection",
+                "No state received from Cync in %ds - rebuilding connection "
+                "(reconnect #%d)",
                 STALE_PUSH_SECONDS,
+                self._reconnect_count,
             )
             if self._cync is not None:
                 try:
@@ -343,6 +357,11 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
                     "%s is now %s", st.name, "online" if new_online else "offline"
                 )
 
+            now = time.monotonic()
+            st.last_change = now
+            if new_online:
+                st.last_online = now
+
             st.online = new_online
             st.power = new_on
             st.brightness = new_bri
@@ -357,3 +376,66 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
         """Record that we just sent a command, to filter the echo window."""
         self._cmd_time[switch_id] = time.time()
         self._cmd_state[switch_id] = on
+
+    # -- Diagnostics ---------------------------------------------------------
+
+    def diagnostics_snapshot(self) -> dict:
+        """Return a JSON-serializable snapshot of connection & device health.
+
+        Consumed by diagnostics.py. All timestamps are seconds-ago relative to
+        now (monotonic-based), which is what actually matters when diagnosing a
+        device that has gone unavailable, and avoids leaking wall-clock/TZ data.
+        """
+        now = time.monotonic()
+
+        def ago(ts: float) -> float | None:
+            return round(now - ts, 1) if ts else None
+
+        online = sum(1 for d in self.devices.values() if d.online)
+
+        devices = []
+        for st in self.devices.values():
+            devices.append(
+                {
+                    "switch_id": st.switch_id,
+                    "name": st.name,
+                    "device_type": st.device_type,
+                    "kind": "fan" if st.is_fan else "plug" if st.is_plug else "light",
+                    "online": st.online,
+                    "power": st.power,
+                    "brightness": st.brightness,
+                    "supports_brightness": st.supports_brightness,
+                    "supports_color_temp": st.supports_color_temp,
+                    "supports_rgb": st.supports_rgb,
+                    "last_change_s_ago": ago(st.last_change),
+                    "last_online_s_ago": ago(st.last_online),
+                }
+            )
+        devices.sort(key=lambda d: (d["online"], d["name"]))
+
+        return {
+            "connection": {
+                "connected": self._cync is not None,
+                "reconnecting": self._reconnecting,
+                "connected_s_ago": ago(self._connected_at),
+                "last_cloud_push_s_ago": ago(self._last_push),
+                "stale_threshold_s": STALE_PUSH_SECONDS,
+                "is_stale": ago(self._last_push) is not None
+                and (now - self._last_push) > STALE_PUSH_SECONDS,
+                "reconnect_count": self._reconnect_count,
+                "last_reconnect_s_ago": ago(self._last_reconnect_at),
+                "poll_interval_s": self.update_interval.total_seconds()
+                if self.update_interval
+                else None,
+                "last_update_success": self.last_update_success,
+            },
+            "summary": {
+                "device_count": len(self.devices),
+                "online_count": online,
+                "offline_count": len(self.devices) - online,
+                "offline_devices": [
+                    d["name"] for d in devices if not d["online"]
+                ],
+            },
+            "devices": devices,
+        }

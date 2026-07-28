@@ -2,6 +2,40 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.1.2] - 2026-07-28
+
+### Changed
+- Replaced `icon.png` and `logo.png` with the official Cync mark artwork. `icon.png` is normalized to 256×256 for the HACS tile. No integration code changed.
+
+## [1.1.1] - 2026-07-28
+
+### Added
+- Repo-root `icon.png` (256×256) and `logo.png` (512×512) with the Cync mark, so HACS shows a proper tile image for the integration instead of a placeholder.
+- `CONTRIBUTING.md` with bug-report guidance that points to the new diagnostics download.
+
+### Changed
+- The distributed repo archive now extracts with its contents at the top level (`custom_components/`, `hacs.json`, `README.md`, `icon.png`, … directly at the archive root, with no wrapper folder) — matching the standard HACS repository layout. Extract it straight into an empty repo and the tree is correct with nothing to move. No integration code changed.
+
+## [1.1.0] - 2026-07-23
+
+### Added
+- **Downloadable diagnostics.** Home Assistant now shows a "Download diagnostics" option on the Cync Lights config entry and on each Cync device (Settings → Devices & Services → Cync Lights → three-dot menu, or the same menu on an individual device page). Built specifically to make the intermittent "device became unavailable" problem debuggable after the fact — capture a download at the moment a device is showing unavailable and the cause is usually visible in the connection section.
+  - **Connection block:** whether the cloud connection is live, seconds since the last state push from the cloud, whether that has crossed the staleness threshold, total reconnect count, seconds since the last reconnect, the poll interval, and the coordinator's `last_update_success`. If devices are dropping because the cloud has gone quiet, `last_cloud_push_s_ago` climbing past `stale_threshold_s` (300s) shows it directly.
+  - **Summary block:** device/online/offline counts and an explicit list of which devices are currently offline.
+  - **Per-device records:** type, capabilities, current power/brightness, and — key for this problem — how many seconds ago each device last changed state and was last seen online. Offline devices are listed first.
+  - Credentials and tokens (`username`, `password`, `access_token`, `refresh_token`, `authorize`, `user_id`) are redacted from the download. All timestamps are relative ("seconds ago") rather than wall-clock, so no location/timezone data leaks either.
+- Coordinator now tracks reconnect count, connection timestamp, and per-device last-change / last-online timestamps to support the above.
+
+## [1.0.6] - 2026-07-23
+
+### Fixed
+- **HACS download failed with `No manifest.json file found 'custom_components/None/manifest.json'`.** The literal `None` in that path is HACS reporting that it could not resolve the integration's domain — it does so by listing `custom_components/*/` at the **repository root** and reading `domain` from the manifest inside. Getting `None` means nothing was found there.
+  - Cause: the distributed repo archive wrapped everything in a top-level `cync-lights-hacs/` folder. Committing that folder as-is produces `<repo-root>/cync-lights-hacs/custom_components/cync_lights/` on GitHub — one level too deep for HACS, which only ever looks at `<repo-root>/custom_components/`.
+  - The repo archive now has its contents at the archive root (`custom_components/`, `hacs.json`, `README.md`, … with no wrapper directory), so extracting it into a cloned repo produces the layout HACS requires.
+
+### Note
+No integration code changed in this release. The version bump exists so a clean release tag can be published — the `1.0.5` tag's tree has the wrong layout and HACS caches per-ref repository structure.
+
 ## [1.0.5] - 2026-07-23
 
 ### Fixed
