@@ -2,6 +2,13 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.1.3] - 2026-07-28
+
+### Added
+- **Troubleshooting section in the README.** Documents how to read a diagnostics download to tell the two failure modes apart: an unhealthy integration↔cloud connection (`is_stale`, `last_update_success`, `reconnect_count`) versus a healthy connection where devices still show unavailable — the latter being a stale **Cync account session**, resolved by re-authenticating the official Cync app, not by anything in the integration. Also covers single-device offline cases and how to enable debug logging (including that pycync logs under its own namespace).
+
+No integration code changed. This documents a diagnosis confirmed from real diagnostics captures: with a fully healthy `connection` block, 5 devices reported offline purely because the Cync account session had gone stale; re-authenticating the Cync app brought all 14 back online, and live state pushes were confirmed working (`last_cloud_push_s_ago` decoupled from `connected_s_ago`).
+
 ## [1.1.2] - 2026-07-28
 
 ### Changed

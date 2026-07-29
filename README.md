@@ -56,9 +56,36 @@ This integration creates one entity per device. For multi-device control (e.g. "
 - Requires an internet connection — this connects to the Cync cloud rather than controlling devices purely on the local network. (This matches how the official Cync app and other community integrations like cync-lan operate.)
 - Dimmable/color features depend entirely on what your specific Cync device model supports; plain on/off switches will only expose an on/off control.
 
+## Troubleshooting
+
+### Some devices show "unavailable"
+
+First, **download diagnostics**: Settings → Devices & Services → Cync Lights → the three-dot menu → **Download diagnostics** (or the same menu on a specific device page). Credentials and tokens are automatically redacted. Look at the `connection` block:
+
+- **`is_stale: true`, or `last_update_success: false`, or a rising `reconnect_count`** → the integration's connection to the Cync cloud is the problem. It rebuilds itself automatically after `stale_threshold_s` (5 minutes), so give it a few minutes; if it doesn't recover, reload the integration.
+- **`connection` looks healthy** (`connected: true`, `is_stale: false`, `last_update_success: true`, `reconnect_count: 0`) **but devices are still unavailable** → the problem is almost always on the **Cync account side**, not this integration. The integration reports exactly what the Cync cloud tells it, and a stale account session can make the cloud report devices as offline to everything using that session.
+
+  The fix that reliably clears this: **open the official Cync app and re-authenticate it** — sign out and back in, or delete and reinstall the app and log in again. Toggle the affected devices once in the app to confirm they respond. This refreshes your account's device state on Cync's servers; the integration will then see the devices come back online, usually within a poll cycle (60s) or after a reload.
+
+- **One specific device is persistently offline while everything else is fine** → check that switch physically (power, Wi-Fi signal). Confirm whether it also shows offline in the official Cync app — if it does, it's a device/network issue, not something the integration can resolve.
+
+### Enabling debug logs
+
+Add this to `configuration.yaml`, restart, and reproduce the issue:
+
+```yaml
+logger:
+  logs:
+    custom_components.cync_lights: debug
+    pycync: info
+```
+
+Note that pycync's own messages log under the `pycync` namespace, not `custom_components.cync_lights`, so include both.
+
 ## Support this project
 
 If this integration is useful to you, consider [buying me a coffee](https://www.buymeacoffee.com/sam3gp8) ☕
+
 
 ## Issues & contributions
 
