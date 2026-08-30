@@ -23,6 +23,7 @@ from typing import Any, Optional
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_USERNAME, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -135,7 +136,12 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
             _LOGGER.info("No usable saved token (%s) - logging in fresh", err)
 
         if not restored:
-            user = await auth.login()
+            try:
+                user = await auth.login()
+            except AuthFailedError as err:
+                raise ConfigEntryAuthFailed(
+                    f"Cync authentication failed: {err}"
+                ) from err
             self._async_persist_token(user)
             _LOGGER.info("Authenticated with Cync as %s", self.username)
 
@@ -145,6 +151,33 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
             self._cync = await Cync.create(
                 auth, ssl_context=_SSL_CONTEXT, ssl_context_no_verify=_SSL_CONTEXT
             )
+        except AuthFailedError as err:
+            # A saved token that the server has since invalidated. Try a fresh
+            # username/password login once; if that also fails, ask the user to
+            # reauthenticate via the HA UI.
+            if restored:
+                _LOGGER.info("Saved Cync token rejected - retrying fresh login")
+                try:
+                    user = await auth.login()
+                except AuthFailedError as login_err:
+                    raise ConfigEntryAuthFailed(
+                        f"Cync credentials no longer valid: {login_err}"
+                    ) from login_err
+                self._async_persist_token(user)
+                try:
+                    self._cync = await Cync.create(
+                        auth,
+                        ssl_context=_SSL_CONTEXT,
+                        ssl_context_no_verify=_SSL_CONTEXT,
+                    )
+                except Exception as err2:  # noqa: BLE001
+                    raise UpdateFailed(
+                        f"Could not connect to Cync cloud: {err2}"
+                    ) from err2
+            else:
+                raise ConfigEntryAuthFailed(
+                    f"Cync authentication failed: {err}"
+                ) from err
         except Exception as err:
             raise UpdateFailed(f"Could not connect to Cync cloud: {err}") from err
 
@@ -241,6 +274,10 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
 
         try:
             refreshed = await self._cync.refresh_credentials()
+        except AuthFailedError as err:
+            raise ConfigEntryAuthFailed(
+                f"Cync token refresh rejected: {err}"
+            ) from err
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Cync token refresh failed: %s", err)
             return

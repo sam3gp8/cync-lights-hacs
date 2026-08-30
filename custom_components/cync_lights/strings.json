@@ -9,6 +9,14 @@
           "password": "Password"
         }
       },
+      "reauth_confirm": {
+        "title": "Reauthenticate your Cync account",
+        "description": "Your saved Cync sign-in is no longer valid. Re-enter your Cync password to reconnect. If devices remain unavailable afterward, also re-authenticate the official Cync app (see the integration's troubleshooting notes).",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      },
       "otp": {
         "title": "Two-factor code",
         "description": "Cync emailed you a one-time code. Enter it below.",
@@ -23,7 +31,9 @@
       "cannot_connect": "Could not reach the Cync cloud. Please try again."
     },
     "abort": {
-      "already_configured": "This Cync account is already configured."
+      "already_configured": "This Cync account is already configured.",
+      "reauth_successful": "Cync reauthentication was successful.",
+      "wrong_account": "Those credentials are for a different Cync account than the one being reauthenticated."
     }
   }
 }

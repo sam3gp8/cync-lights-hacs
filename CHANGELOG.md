@@ -2,6 +2,16 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.2.0] - 2026-07-28
+
+### Added
+- **In-place reauthentication.** When the integration's saved Cync sign-in stops working, Home Assistant now shows a "Reconfigure"/reauth prompt (a notification on the integration, and the entry marked as needing attention) where you re-enter your Cync password — no more deleting and re-adding the integration. The flow reuses the existing 2FA step if your account prompts for a code, and matches the reauthenticated credentials to the existing entry by Cync account ID so you can't accidentally attach a different account.
+  - The coordinator now raises `ConfigEntryAuthFailed` (instead of a generic retryable error) in the three places auth can genuinely fail: fresh login rejected, a restored token the server has invalidated (it first retries a full password login automatically, and only prompts if that also fails), and a rejected token refresh. Any of these triggers the reauth prompt.
+  - Added a duplicate-account guard: setting up or reauthenticating uses the Cync account ID as the entry's unique ID, so the same account can't be configured twice.
+
+### Note
+This addresses the integration's *own* stored credentials going stale. It does **not** replace re-authenticating the official Cync app in the separate case where the Cync **account session** has gone stale on Cync's servers (healthy `connection` in diagnostics but devices still offline) — see the README troubleshooting section. The two are different layers; this feature covers the one the integration controls.
+
 ## [1.1.3] - 2026-07-28
 
 ### Added
