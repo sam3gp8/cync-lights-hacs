@@ -35,5 +35,27 @@
       "reauth_successful": "Cync reauthentication was successful.",
       "wrong_account": "Those credentials are for a different Cync account than the one being reauthenticated."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Local control (optional)",
+        "description": "Run a local server so Cync devices can be controlled without internet. Requires pointing cm.gelighting.com at Home Assistant via DNS \u2014 the integration can do this automatically if you use AdGuard Home. This is experimental; the cloud connection keeps working regardless.",
+        "data": {
+          "enable_local": "Enable local control",
+          "host_ip": "Home Assistant IP address (that devices should connect to)",
+          "manage_adguard": "Automatically manage the AdGuard Home DNS rewrite",
+          "adguard_url": "AdGuard Home URL (e.g. http://homeassistant.local:3000)",
+          "adguard_username": "AdGuard username",
+          "adguard_password": "AdGuard password"
+        }
+      }
+    },
+    "error": {
+      "host_ip_required": "Enter Home Assistant's IP address to enable local control.",
+      "adguard_url_required": "Enter the AdGuard Home URL to let the integration manage DNS.",
+      "adguard_auth": "AdGuard rejected those credentials.",
+      "adguard_cannot_connect": "Could not reach AdGuard Home at that URL."
+    }
   }
 }

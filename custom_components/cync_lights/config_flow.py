@@ -9,10 +9,21 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_USERNAME, CONF_PASSWORD
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, CONF_OTP
+from .const import (
+    DOMAIN,
+    CONF_OTP,
+    CONF_ENABLE_LOCAL,
+    CONF_HOST_IP,
+    CONF_MANAGE_ADGUARD,
+    CONF_ADGUARD_URL,
+    CONF_ADGUARD_USERNAME,
+    CONF_ADGUARD_PASSWORD,
+)
+from .adguard import AdGuardClient, AdGuardError, AdGuardAuthError
 from .pycync.auth import Auth, TwoFactorRequiredError, AuthFailedError
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,6 +46,13 @@ class CyncLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Cync Lights."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> "CyncLightsOptionsFlow":
+        return CyncLightsOptionsFlow(config_entry)
 
     def __init__(self) -> None:
         self._username: str | None = None
@@ -169,3 +187,78 @@ class CyncLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._abort_if_unique_id_configured()
         return self.async_create_entry(title=self._username, data=token_data)
+
+
+class CyncLightsOptionsFlow(config_entries.OptionsFlow):
+    """Options: enable local control and configure AdGuard DNS automation."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Single options page for the local-control settings."""
+        errors: dict[str, str] = {}
+        opts = self.config_entry.options
+
+        if user_input is not None:
+            # If AdGuard management is requested, validate the connection before
+            # saving so the user gets immediate feedback rather than a silent
+            # failure later.
+            if user_input.get(CONF_ENABLE_LOCAL) and user_input.get(CONF_MANAGE_ADGUARD):
+                if not user_input.get(CONF_ADGUARD_URL):
+                    errors["base"] = "adguard_url_required"
+                else:
+                    session = async_get_clientsession(self.hass)
+                    client = AdGuardClient(
+                        session,
+                        user_input[CONF_ADGUARD_URL],
+                        user_input.get(CONF_ADGUARD_USERNAME, ""),
+                        user_input.get(CONF_ADGUARD_PASSWORD, ""),
+                    )
+                    try:
+                        await client.async_test_connection()
+                    except AdGuardAuthError:
+                        errors["base"] = "adguard_auth"
+                    except AdGuardError:
+                        errors["base"] = "adguard_cannot_connect"
+
+            if user_input.get(CONF_ENABLE_LOCAL) and not user_input.get(CONF_HOST_IP):
+                errors["base"] = "host_ip_required"
+
+            if not errors:
+                return self.async_create_entry(title="", data=user_input)
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_ENABLE_LOCAL,
+                    default=opts.get(CONF_ENABLE_LOCAL, False),
+                ): bool,
+                vol.Optional(
+                    CONF_HOST_IP,
+                    default=opts.get(CONF_HOST_IP, ""),
+                ): str,
+                vol.Required(
+                    CONF_MANAGE_ADGUARD,
+                    default=opts.get(CONF_MANAGE_ADGUARD, False),
+                ): bool,
+                vol.Optional(
+                    CONF_ADGUARD_URL,
+                    default=opts.get(CONF_ADGUARD_URL, "http://homeassistant.local:3000"),
+                ): str,
+                vol.Optional(
+                    CONF_ADGUARD_USERNAME,
+                    default=opts.get(CONF_ADGUARD_USERNAME, ""),
+                ): str,
+                vol.Optional(
+                    CONF_ADGUARD_PASSWORD,
+                    default=opts.get(CONF_ADGUARD_PASSWORD, ""),
+                ): str,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="init", data_schema=schema, errors=errors
+        )

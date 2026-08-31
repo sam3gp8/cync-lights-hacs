@@ -34,12 +34,22 @@ from .const import (
     TOKEN_REFRESH_MARGIN,
     PLUG_TYPE_IDS,
     FAN_TYPE_IDS,
+    CONF_ENABLE_LOCAL,
+    CONF_HOST_IP,
+    CONF_MANAGE_ADGUARD,
+    CONF_ADGUARD_URL,
+    CONF_ADGUARD_USERNAME,
+    CONF_ADGUARD_PASSWORD,
+    LOCAL_SERVER_PORT,
 )
 from .pycync.auth import Auth, AuthFailedError
 from .pycync.cync import Cync
 from .pycync.user import User
 from .pycync.devices.devices import CyncLight
 from .pycync.devices.capabilities import CyncCapability
+from .adguard import AdGuardClient, AdGuardError
+from .cert import ensure_certificate
+from .local_server import CyncLocalServer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -110,6 +120,17 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
         self._reconnect_count: int = 0
         self._connected_at: float = 0.0
         self._last_reconnect_at: float = 0.0
+
+        # Local control (optional).
+        self._local_server: Optional[CyncLocalServer] = None
+        self._adguard: Optional[AdGuardClient] = None
+        # mesh_id/switch_id -> hub switch_id that owns the local connection,
+        # populated as devices connect to the local server.
+        self._local_hub_for: dict[int, int] = {}
+
+    @property
+    def local_enabled(self) -> bool:
+        return bool(self.entry.options.get(CONF_ENABLE_LOCAL))
 
     # -- Connection lifecycle ------------------------------------------------
 
@@ -199,6 +220,104 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
             sum(1 for d in self.devices.values() if d.online),
         )
 
+        # Optionally bring up the local-control path.
+        if self.local_enabled:
+            await self._async_start_local()
+
+    async def _async_start_local(self) -> None:
+        """Start the local TLS server and set the AdGuard rewrite if enabled.
+
+        This is additive to the cloud connection: the cloud path keeps handling
+        device enumeration and state, while the local server lets physical
+        devices connect to HA so commands work without internet. Failures here
+        are logged but do NOT tear down the working cloud integration.
+        """
+        opts = self.entry.options
+        host_ip = opts.get(CONF_HOST_IP)
+
+        # Certificate for the local TLS server.
+        cert_path = self.hass.config.path("cync_local_server.crt")
+        key_path = self.hass.config.path("cync_local_server.key")
+        if not await self.hass.async_add_executor_job(
+            ensure_certificate, cert_path, key_path
+        ):
+            _LOGGER.error("Local control enabled but certificate generation failed")
+            return
+
+        if self._local_server is None:
+            self._local_server = CyncLocalServer(
+                cert_file=cert_path,
+                key_file=key_path,
+                port=LOCAL_SERVER_PORT,
+                state_callback=self._handle_local_state,
+            )
+            try:
+                await self._local_server.start()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.error("Could not start local Cync server: %s", err)
+                self._local_server = None
+                return
+
+        # Optionally manage the AdGuard DNS rewrite so devices reach us.
+        if opts.get(CONF_MANAGE_ADGUARD) and opts.get(CONF_ADGUARD_URL) and host_ip:
+            session = async_get_clientsession(self.hass)
+            self._adguard = AdGuardClient(
+                session,
+                opts[CONF_ADGUARD_URL],
+                opts.get(CONF_ADGUARD_USERNAME, ""),
+                opts.get(CONF_ADGUARD_PASSWORD, ""),
+            )
+            try:
+                await self._adguard.async_set_cync_rewrite(host_ip)
+            except AdGuardError as err:
+                _LOGGER.error("Could not set AdGuard rewrite: %s", err)
+        elif self.local_enabled and not opts.get(CONF_MANAGE_ADGUARD):
+            _LOGGER.info(
+                "Local server running on :%d. Point cm.gelighting.com at %s in "
+                "your DNS for devices to connect locally.",
+                LOCAL_SERVER_PORT,
+                host_ip or "this host",
+            )
+
+    def _handle_local_state(
+        self,
+        mesh_id: int,
+        is_on: bool,
+        brightness: int,
+        color_temp: int,
+        r: int,
+        g: int,
+        b: int,
+        hub_id: Optional[int] = None,
+        is_online: bool = True,
+    ) -> None:
+        """State update coming from a directly-connected local device."""
+        self._last_push = time.monotonic()
+        if hub_id is not None and mesh_id is not None:
+            self._local_hub_for[mesh_id] = hub_id
+
+        # Match by switch_id first (WiFi devices), then mesh id.
+        st = self.devices.get(mesh_id)
+        if st is None:
+            for cand in self.devices.values():
+                if cand.switch_id == mesh_id:
+                    st = cand
+                    break
+        if st is None:
+            return
+
+        now = time.monotonic()
+        changed = st.online != is_online or st.power != is_on or st.brightness != brightness
+        st.online = is_online
+        st.power = is_on
+        st.brightness = brightness
+        st.rgb = (r, g, b)
+        st.last_change = now
+        if is_online:
+            st.last_online = now
+        if changed:
+            self.async_set_updated_data(self.devices)
+
     async def _async_reconnect(self) -> None:
         """Tear down and rebuild the cloud connection."""
         if self._reconnecting:
@@ -226,11 +345,48 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
             self._reconnecting = False
 
     async def async_shutdown_connection(self) -> None:
+        # Restore cloud DNS if we were managing the AdGuard rewrite.
+        if self._adguard is not None:
+            try:
+                await self._adguard.async_clear_cync_rewrite()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Error clearing AdGuard rewrite: %s", err)
+            self._adguard = None
+        if self._local_server is not None:
+            try:
+                await self._local_server.stop()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Error stopping local server: %s", err)
+            self._local_server = None
         if self._cync:
             try:
                 await self._cync.shut_down()
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Error during Cync shutdown: %s", err)
+
+    def local_command_target(self, switch_id: int) -> Optional[tuple[int, int]]:
+        """If a device is reachable via the local server, return (hub_id, mesh_id).
+
+        Returns None when the device isn't locally connected, in which case the
+        caller should fall back to the cloud command path.
+        """
+        if self._local_server is None:
+            return None
+        connected = set(self._local_server.connected_device_ids)
+        if not connected:
+            return None
+        # Direct WiFi device connected to us.
+        if switch_id in connected:
+            return (switch_id, switch_id)
+        # Mesh device behind a locally-connected hub.
+        hub = self._local_hub_for.get(switch_id)
+        if hub is not None and hub in connected:
+            return (hub, switch_id)
+        return None
+
+    @property
+    def local_server(self) -> Optional[CyncLocalServer]:
+        return self._local_server
 
     # -- Periodic update -----------------------------------------------------
 
@@ -465,6 +621,16 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
                 if self.update_interval
                 else None,
                 "last_update_success": self.last_update_success,
+            },
+            "local_control": {
+                "enabled": self.local_enabled,
+                "server_running": self._local_server is not None,
+                "locally_connected_device_ids": (
+                    self._local_server.connected_device_ids
+                    if self._local_server is not None
+                    else []
+                ),
+                "manages_adguard": bool(self._adguard is not None),
             },
             "summary": {
                 "device_count": len(self.devices),

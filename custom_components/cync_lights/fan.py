@@ -92,7 +92,11 @@ class CyncFanEntity(CoordinatorEntity[CyncCoordinator], FanEntity):
         pd = self._state.pycync_dev
         cc = getattr(pd, "_command_client", None)
         self.coordinator.note_command(self._switch_id, True)
-        if cc:
+        local = self.coordinator.local_command_target(self._switch_id)
+        srv = self.coordinator.local_server
+        if local and srv:
+            srv.set_power(local[0], local[1], True)
+        elif cc:
             await cc.set_power_state(pd, True)
         self._state.power = True
         if percentage is not None:
@@ -103,7 +107,11 @@ class CyncFanEntity(CoordinatorEntity[CyncCoordinator], FanEntity):
         pd = self._state.pycync_dev
         cc = getattr(pd, "_command_client", None)
         self.coordinator.note_command(self._switch_id, False)
-        if cc:
+        local = self.coordinator.local_command_target(self._switch_id)
+        srv = self.coordinator.local_server
+        if local and srv:
+            srv.set_power(local[0], local[1], False)
+        elif cc:
             await cc.set_power_state(pd, False)
         self._state.power = False
         self.async_write_ha_state()
@@ -114,7 +122,11 @@ class CyncFanEntity(CoordinatorEntity[CyncCoordinator], FanEntity):
             await self.async_turn_off()
             return
         speed = round(percentage_to_ranged_value(SPEED_RANGE, percentage))
-        if hasattr(pd, "set_brightness"):
+        local = self.coordinator.local_command_target(self._switch_id)
+        srv = self.coordinator.local_server
+        if local and srv:
+            srv.set_brightness(local[0], local[1], speed)
+        elif hasattr(pd, "set_brightness"):
             await pd.set_brightness(speed)
         self._state.brightness = speed
         self._state.power = True

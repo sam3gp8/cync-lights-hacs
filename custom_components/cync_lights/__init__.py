@@ -5,7 +5,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import CyncCoordinator
@@ -19,6 +19,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         await coordinator.async_connect()
+    except ConfigEntryAuthFailed:
+        # Let HA trigger the reauth flow rather than masking it as a retry.
+        raise
     except Exception as err:  # noqa: BLE001
         raise ConfigEntryNotReady(f"Could not connect to Cync: {err}") from err
 

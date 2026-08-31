@@ -2,6 +2,23 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.3.0] - 2026-07-28
+
+### Added
+- **Local control (experimental, opt-in).** A new options page (Settings → Devices & Services → Cync Lights → Configure) can run a local TLS server that impersonates `cm.gelighting.com`, so physical Cync devices connect to Home Assistant and can be controlled without an internet connection. When enabled:
+  - If you use **AdGuard Home**, the integration manages the required DNS rewrite for you automatically — enter your AdGuard URL and credentials and it points `cm.gelighting.com` at Home Assistant, and removes that rewrite again when local control is disabled or the integration is removed. No hand-editing AdGuard's rewrite list.
+  - If you don't use AdGuard, the local server still runs; you point `cm.gelighting.com` at Home Assistant in whatever DNS you do use (the log states the target).
+  - Commands automatically prefer the local path for any device currently connected to the local server, and fall back to the cloud for devices that aren't. State pushed by locally-connected devices updates HA directly.
+  - A self-signed certificate for the local server is generated automatically (Cync firmware doesn't verify it).
+  - Diagnostics now include a `local_control` block (enabled, server running, which device IDs are locally connected, whether AdGuard is being managed).
+- New modules: `local_server.py` (the corrected protocol server), `adguard.py` (AdGuard Home rewrite API client), `cert.py` (self-signed cert generation).
+
+### Fixed
+- The local server's protocol handling — the reason this never worked in the earlier add-on. The old implementation sent malformed **version-0** response bytes (`0x18` login-ack, `0x28` handshake-ack, `0xAB`, `0xD8`) where Cync firmware requires **version-3** responses (`0x1b`, `0x2b`, `0xab`, `0xdb`), and it misclassified `0xA3` (a PROBE request) as a "legacy connect". A device that logged in, received a bad ack, and never got a correct PROBE reply would hang and drop at its firmware timeout — the ~15-second disconnect. Response bytes are now derived from the same `(type << 4) | (is_response << 3) | version` formula the working cloud client uses, verified against the vendored pycync protocol code.
+
+### ⚠️ Important — not yet hardware-verified
+The protocol fix above is derived from and cross-checked against pycync's working cloud protocol, but as of this release it has **not been confirmed against a physical device holding a stable connection**. The disconnect *should* be resolved, but this is the exact problem that defeated the earlier add-on, so treat local control as experimental until a device is observed staying connected and responding to commands with the cloud path blocked. The **cloud connection is unaffected** and remains the default — local control is entirely opt-in, and nothing here changes behavior unless you enable it.
+
 ## [1.2.0] - 2026-07-28
 
 ### Added

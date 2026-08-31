@@ -123,10 +123,17 @@ class CyncLightEntity(CoordinatorEntity[CyncCoordinator], LightEntity):
 
         is_light = isinstance(pd, CyncLight)
         command_client = getattr(pd, "_command_client", None)
+        local = self.coordinator.local_command_target(self._switch_id)
+        srv = self.coordinator.local_server
 
         if ATTR_BRIGHTNESS in kwargs and self._state.supports_brightness and is_light:
             pct = max(1, min(100, round(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
-            await pd.set_brightness(pct)
+            if local and srv:
+                srv.set_brightness(local[0], local[1], pct)
+            else:
+                await pd.set_brightness(pct)
+        elif local and srv:
+            srv.set_power(local[0], local[1], True)
         elif is_light:
             await pd.turn_on()
         elif command_client:
@@ -139,10 +146,17 @@ class CyncLightEntity(CoordinatorEntity[CyncCoordinator], LightEntity):
         if ATTR_COLOR_TEMP_KELVIN in kwargs and self._state.supports_color_temp and is_light:
             mireds = round(1_000_000 / kwargs[ATTR_COLOR_TEMP_KELVIN])
             pct = max(1, min(100, round((MAX_MIREDS - mireds) / (MAX_MIREDS - MIN_MIREDS) * 100)))
-            await pd.set_color_temp(pct)
+            if local and srv:
+                srv.set_color_temp(local[0], local[1], pct)
+            else:
+                await pd.set_color_temp(pct)
 
         if ATTR_RGB_COLOR in kwargs and self._state.supports_rgb and is_light:
-            await pd.set_rgb(tuple(kwargs[ATTR_RGB_COLOR]))
+            rgb = tuple(kwargs[ATTR_RGB_COLOR])
+            if local and srv:
+                srv.set_rgb(local[0], local[1], rgb[0], rgb[1], rgb[2])
+            else:
+                await pd.set_rgb(rgb)
 
         self._state.power = True
         self.async_write_ha_state()
@@ -151,7 +165,11 @@ class CyncLightEntity(CoordinatorEntity[CyncCoordinator], LightEntity):
         pd = self._state.pycync_dev
         self.coordinator.note_command(self._switch_id, False)
 
-        if isinstance(pd, CyncLight):
+        local = self.coordinator.local_command_target(self._switch_id)
+        srv = self.coordinator.local_server
+        if local and srv:
+            srv.set_power(local[0], local[1], False)
+        elif isinstance(pd, CyncLight):
             await pd.turn_off()
         else:
             command_client = getattr(pd, "_command_client", None)

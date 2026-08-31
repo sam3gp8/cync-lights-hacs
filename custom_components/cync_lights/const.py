@@ -5,6 +5,19 @@ DOMAIN = "cync_lights"
 
 CONF_OTP = "otp"
 
+# -- Local control (optional) --------------------------------------------------
+# When enabled, the integration runs a local TLS server impersonating
+# cm.gelighting.com and (optionally) manages an AdGuard Home DNS rewrite so
+# physical devices connect to Home Assistant instead of the Cync cloud.
+CONF_ENABLE_LOCAL = "enable_local"
+CONF_HOST_IP = "host_ip"                # HA's LAN IP that devices should reach
+CONF_MANAGE_ADGUARD = "manage_adguard"  # let the integration set the DNS rewrite
+CONF_ADGUARD_URL = "adguard_url"
+CONF_ADGUARD_USERNAME = "adguard_username"
+CONF_ADGUARD_PASSWORD = "adguard_password"
+
+LOCAL_SERVER_PORT = 23779
+
 PLATFORMS = [Platform.LIGHT, Platform.SWITCH, Platform.FAN]
 
 DEFAULT_SCAN_INTERVAL = 60  # seconds between forced state refreshes
