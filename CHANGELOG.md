@@ -2,6 +2,15 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.3.1] - 2026-07-28
+
+### Fixed
+- **hassfest validation failures.**
+  - `strings.json` / `translations/en.json`: the `adguard_url` field label contained a URL (`http://homeassistant.local:3000`), which hassfest's translation check rejects (field labels can't contain URLs). Removed all URLs from the string files — the label is now just "AdGuard Home URL" and the port hint is given in plain words in the step description.
+  - `manifest.json`: ensured `codeowners` is `["@sam3gp8"]` with the leading `@` (hassfest requires the `@` prefix). If you pushed an earlier build where this read `["sam3gp8"]`, this corrects it.
+
+No functional change to the integration.
+
 ## [1.3.0] - 2026-07-28
 
 ### Added

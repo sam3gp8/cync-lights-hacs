@@ -40,12 +40,12 @@
     "step": {
       "init": {
         "title": "Local control (optional)",
-        "description": "Run a local server so Cync devices can be controlled without internet. Requires pointing cm.gelighting.com at Home Assistant via DNS \u2014 the integration can do this automatically if you use AdGuard Home. This is experimental; the cloud connection keeps working regardless.",
+        "description": "Run a local server so Cync devices can be controlled without internet. Requires pointing cm.gelighting.com at Home Assistant via DNS - the integration can do this automatically if you use AdGuard Home. This is experimental; the cloud connection keeps working regardless. Enter the AdGuard Home address including its port (the default admin port is 3000).",
         "data": {
           "enable_local": "Enable local control",
           "host_ip": "Home Assistant IP address (that devices should connect to)",
           "manage_adguard": "Automatically manage the AdGuard Home DNS rewrite",
-          "adguard_url": "AdGuard Home URL (e.g. http://homeassistant.local:3000)",
+          "adguard_url": "AdGuard Home URL",
           "adguard_username": "AdGuard username",
           "adguard_password": "AdGuard password"
         }
