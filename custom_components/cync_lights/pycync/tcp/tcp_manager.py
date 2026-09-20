@@ -44,6 +44,13 @@ class TcpManager:
 
         self._login_acknowledged = False
 
+        # Diagnostics: how many inbound packets failed to parse, and the most
+        # recent error. A non-zero count while devices are unavailable means
+        # the cloud IS answering but its reply can't be decoded - a protocol
+        # gap to chase, not a stale session.
+        self.parse_error_count = 0
+        self.last_parse_error: str | None = None
+
         self._tcp_client_startup = asyncio.create_task(self._start_tcp_client())
         self._process_packet_task = None
         self._heartbeat_task = None
@@ -70,6 +77,11 @@ class TcpManager:
 
                 self._process_packet_task.add_done_callback(self._read_task_finished)
 
+    def _note_parse_error(self, message: str) -> None:
+        """Record an inbound-packet parse failure for diagnostics."""
+        self.parse_error_count += 1
+        self.last_parse_error = message
+
     async def _establish_tcp_connection(self):
         if self._ssl_context is None:
             context = ssl.create_default_context()
@@ -79,7 +91,7 @@ class TcpManager:
         self._packet_queue = asyncio.Queue()
 
         try:
-            self._transport, self._protocol = await asyncio.get_event_loop().create_connection(lambda: CyncTcpProtocol(self._packet_queue, self._user), host=TCP_API_HOSTNAME, port=TCP_API_TLS_PORT, ssl=context)
+            self._transport, self._protocol = await asyncio.get_event_loop().create_connection(lambda: CyncTcpProtocol(self._packet_queue, self._user, self._note_parse_error), host=TCP_API_HOSTNAME, port=TCP_API_TLS_PORT, ssl=context)
         except Exception:
             # Normally this isn't something you'd want to do.
             # However, Cync's server has a 2+ year expired certificate and the common name doesn't match.
@@ -92,7 +104,7 @@ class TcpManager:
             else:
                 context = self._ssl_context_no_verify
 
-            self._transport, self._protocol = await asyncio.get_event_loop().create_connection(lambda: CyncTcpProtocol(self._packet_queue, self._user), host=TCP_API_HOSTNAME, port=TCP_API_TLS_PORT, ssl=context)
+            self._transport, self._protocol = await asyncio.get_event_loop().create_connection(lambda: CyncTcpProtocol(self._packet_queue, self._user, self._note_parse_error), host=TCP_API_HOSTNAME, port=TCP_API_TLS_PORT, ssl=context)
 
     async def _process_packets(self):
         """Process parsed packets as they're added to the async queue."""
@@ -192,10 +204,11 @@ class CyncTcpProtocol(asyncio.Protocol):
 
     _LOGGER = logging.getLogger(__name__)
 
-    def __init__(self, packet_queue: asyncio.Queue, user):
+    def __init__(self, packet_queue: asyncio.Queue, user, on_parse_error: Callable = None):
         self._transport = None
         self._packet_queue = packet_queue
         self._user = user
+        self._on_parse_error = on_parse_error
 
     def connection_made(self, transport):
         self._transport = transport
@@ -220,6 +233,8 @@ class CyncTcpProtocol(asyncio.Protocol):
                 pass
             except Exception as ex:
                 self._LOGGER.error("Unhandled exception while parsing packet: {}".format(str(ex)))
+                if self._on_parse_error is not None:
+                    self._on_parse_error("{}: {}".format(type(ex).__name__, ex))
             finally:
                 data = data[packet_length + 5:]
 

@@ -41,10 +41,29 @@ class CommandClient:
         self._device_statuses_updated = False
         self._tcp_manager: TcpManager = None
 
+        # Diagnostics counters: how many of each server message we've handled.
+        # These distinguish "cloud never answers the state query" (all zero)
+        # from "cloud answers but the reply can't be parsed" (parse errors on
+        # the TcpManager) - the two remaining reasons devices stay unavailable
+        # when the connection, probe, and hub all look healthy.
+        self.status_responses = 0
+        self.sync_pushes = 0
+        self.probe_responses = 0
+
     @property
     def probe_completed(self) -> bool:
         """True once at least one device has answered the initial probe."""
         return self._device_statuses_updated
+
+    @property
+    def parse_error_count(self) -> int:
+        """Count of server packets that failed to parse (from the TCP layer)."""
+        return self._tcp_manager.parse_error_count if self._tcp_manager else 0
+
+    @property
+    def last_parse_error(self) -> str | None:
+        """Message of the most recent packet parse failure, if any."""
+        return self._tcp_manager.last_parse_error if self._tcp_manager else None
 
     @property
     def hub_available(self) -> bool:
@@ -66,15 +85,18 @@ class CommandClient:
             case MessageType.LOGIN.value:
                 await self.probe_devices()
             case MessageType.PROBE.value if parsed_message.version != 0:
+                self.probe_responses += 1
                 devices_in_home = device_storage.get_associated_home_devices(self._user.user_id,
                                                                              parsed_message.device_id)
                 device = next(device for device in devices_in_home if device.device_id == parsed_message.device_id)
                 device.set_wifi_connected(True)
                 self._device_statuses_updated = True
             case MessageType.SYNC.value:
+                self.sync_pushes += 1
                 await self._send_update_to_listener(parsed_message.data)
             case MessageType.PIPE.value:
                 if parsed_message.command_code == PipeCommandCode.QUERY_DEVICE_STATUS_PAGES.value:
+                    self.status_responses += 1
                     updated_devices: dict[int, CyncDevice] = parsed_message.data
                     for device in device_storage.get_flattened_devices(self._user.user_id):
                         device.is_online = device.device_id in updated_devices

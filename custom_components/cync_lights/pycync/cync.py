@@ -86,10 +86,23 @@ class Cync:
 
     def diagnostics(self) -> dict:
         """Return a snapshot of mesh-query health for the diagnostics download."""
+        cc = self._command_client
         return {
-            "probe_completed": self._command_client.probe_completed,
-            "hub_available": self._command_client.hub_available,
+            "probe_completed": cc.probe_completed,
+            "hub_available": cc.hub_available,
             "last_state_query_error": self._last_state_query_error,
+            # Message counters. If a query is being sent (probe_completed and
+            # hub_available true, no error) yet status_responses stays 0 and
+            # parse_error_count stays 0, the cloud is accepting the connection
+            # but never answering the state query - a stale account session,
+            # which only re-authenticating (Reconfigure, or the Cync app) can
+            # resolve. A non-zero parse_error_count with last_parse_error means
+            # replies ARE arriving but can't be decoded - a protocol bug to fix.
+            "probe_responses": cc.probe_responses,
+            "status_responses": cc.status_responses,
+            "sync_pushes": cc.sync_pushes,
+            "parse_error_count": cc.parse_error_count,
+            "last_parse_error": cc.last_parse_error,
         }
 
     def get_devices(self):
