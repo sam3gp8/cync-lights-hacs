@@ -2,13 +2,14 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
-## [1.3.3] - 2026-09-20
+## [1.4.0] - 2026-09-20
+
+### Added
+- **On-demand re-authentication ("Reconfigure").** The integration now offers a **Reconfigure** action (Settings → Devices & Services → Cync Lights → ⋮ → Reconfigure) that re-signs in to Cync and reloads the connection **without deleting and re-adding the integration**. Unlike the existing reauth prompt — which only appears when the stored credentials are outright rejected — this is available at any time, including the common case where the connection looks healthy but devices are stuck unavailable (a stale Cync account session). It performs a full fresh login (handling 2FA if prompted), re-establishes the cloud session, and re-probes devices. Matches the existing account by Cync account ID so you can't accidentally attach a different account.
+- **`mesh_query` block in the diagnostics download.** Diagnostics now report `probe_completed` (did any device answer the initial probe), `hub_available` (is there a device that can bridge the Bluetooth mesh to Wi-Fi), and `last_state_query_error` (the exception from the most recent state query, if any). This pinpoints *why* devices read unavailable while `connection` looks healthy: if `probe_completed`/`hub_available` are false or an error is present, the cloud is not answering the state query — typically a stale Cync account session (use Reconfigure above, or re-authenticate the official Cync app) — rather than an integration fault.
 
 ### Fixed
 - **Silent infinite wait when the cloud never reports online devices.** `_fetch_hub_device` waited forever (`while not self._device_statuses_updated: sleep(1)`) for the initial device probe to report a Wi-Fi-connected device. When the Cync server accepts the login but never sends probe responses — the classic **stale account session** — that wait never returned, so the mesh state query never ran, no state was ever pushed, and every device stayed "unavailable" with nothing logged. The wait is now bounded (`HUB_PROBE_TIMEOUT_SECONDS`, 15s) and raises `NoHubConnectedError` with a message pointing at the likely cause, which the 1.3.2 logging then surfaces.
-
-### Added
-- **`mesh_query` block in the diagnostics download.** Diagnostics now report `probe_completed` (did any device answer the initial probe), `hub_available` (is there a device that can bridge the Bluetooth mesh to Wi-Fi), and `last_state_query_error` (the exception from the most recent state query, if any). This pinpoints *why* devices read unavailable while `connection` looks healthy: if `probe_completed`/`hub_available` are false or an error is present, the cloud is not answering the state query — typically a stale Cync account session that re-authenticating the official Cync app resolves — rather than an integration fault.
 
 ## [1.3.2] - 2026-09-20
 
