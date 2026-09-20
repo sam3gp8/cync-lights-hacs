@@ -1,0 +1,65 @@
+name: Release
+
+# Cuts a GitHub Release automatically whenever the integration's version is
+# bumped on main, so every merged version PR produces a HACS-installable
+# release without a manual step. Idempotent: skips if the release already
+# exists, so re-runs and unrelated manifest edits are harmless.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - custom_components/cync_lights/manifest.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from manifest
+        id: ver
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('custom_components/cync_lights/manifest.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether the release already exists
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract the changelog section for this version
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { flag=1; next }
+            flag && /^## \[/ { flag=0 }
+            flag { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "Release ${VERSION}." > release_notes.md
+          fi
+
+      - name: Create the release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.ver.outputs.version }}" \
+            --title "${{ steps.ver.outputs.version }}" \
+            --notes-file release_notes.md \
+            --target "${{ github.sha }}"
