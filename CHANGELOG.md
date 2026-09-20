@@ -2,6 +2,13 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.3.2] - 2026-09-20
+
+### Fixed
+- **All devices stuck "unavailable" while the cloud connection is healthy.** A single unrecognized entry in a mesh state response would abort parsing of the *entire* response, so no device's online/state was updated and every entity stayed unavailable — even though `connection` reported healthy. This is the failure mode where a diagnostics download shows `last_cloud_push_s_ago` equal to `connected_s_ago` (no state push has ever been received since connecting) and every device with `last_change_s_ago: null`, which is distinct from the stale-account-session case documented in 1.1.3 (where pushes still flow).
+  - `packet_parser.py`: both the mesh status-page parser (`QUERY_DEVICE_STATUS_PAGES`) and the live SYNC parser now **skip** a mesh id they can't map to a known cloud device (e.g. a device removed from the account but still physically in the mesh, or a group/scene entry) instead of raising `ValueError`. Previously that exception propagated up to `data_received`, which discarded the whole packet, dropping the state update for every other device in it.
+- **Silent state-refresh failures.** `Cync.update_device_states()` runs the mesh-state query as a detached `asyncio` task, so any exception it raised (e.g. `NoHubConnectedError`, or a timeout waiting on the mesh reply) was swallowed with no log and no way to tell why devices weren't updating. The task now logs its failures so the cause is visible in the Home Assistant log.
+
 ## [1.3.1] - 2026-07-28
 
 ### Fixed

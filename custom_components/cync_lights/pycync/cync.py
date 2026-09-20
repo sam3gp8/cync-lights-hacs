@@ -4,6 +4,7 @@ Each instance of this class corresponds to one user, and all devices/homes assoc
 """
 
 import asyncio
+import logging
 import ssl
 from typing import Callable
 
@@ -13,6 +14,9 @@ from .exceptions import MissingAuthError
 from .const import REST_API_BASE_URL
 from .devices.groups import CyncRoom, CyncGroup, CyncHome
 from .tcp.command_client import CommandClient
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class Cync:
@@ -54,7 +58,24 @@ class Cync:
 
     def update_device_states(self):
         """Query the server for current device states, and update the devices."""
-        asyncio.create_task(self._command_client.update_mesh_devices())
+        task = asyncio.create_task(self._command_client.update_mesh_devices())
+        task.add_done_callback(self._log_state_query_result)
+
+    @staticmethod
+    def _log_state_query_result(task: "asyncio.Task") -> None:
+        """Surface failures from the fire-and-forget mesh-state query.
+
+        The query runs as a detached task, so without this its exceptions
+        (e.g. NoHubConnectedError, or a timeout waiting on the mesh reply) are
+        swallowed - the caller never learns the state refresh failed, and
+        devices silently stay "unavailable". Log it so the failure is visible.
+        """
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception:  # noqa: BLE001 - detached task, log everything
+            _LOGGER.warning("Failed to refresh Cync device states", exc_info=True)
 
     def get_devices(self):
         """Get a flat list of devices associated with this user."""
