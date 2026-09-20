@@ -62,14 +62,17 @@ def _parse_sync_packet(packet: bytearray, is_response, version, user_id) -> Pars
             info_length = struct.unpack(">H", packet[1:3])[0]
             packet = packet[3:info_length + 3]
             mesh_id = packet[0]
-            try:
-                resolved_device: CyncDevice = next(device for device in device_list if device.isolated_mesh_id == mesh_id)
+            resolved_device: CyncDevice = next(
+                (device for device in device_list if device.isolated_mesh_id == mesh_id), None)
+            if resolved_device is not None:
+                # A mesh id we can't map to a known cloud device (e.g. a device
+                # removed from the account but still physically in the mesh) must
+                # not abort the whole packet - that would drop every other
+                # device's update and leave them stuck "unavailable".
                 if DeviceType.is_light(resolved_device.device_type_id):
                     resolved_device.update_state(bool(packet[1]), packet[2], packet[3], (packet[4], packet[5], packet[6]))
-            except StopIteration as ex:
-                raise ValueError("Unable to resolve device ID for mesh ID: {}".format(mesh_id)) from ex
+                updated_device_data[resolved_device.device_id] = resolved_device
 
-            updated_device_data[resolved_device.device_id] = resolved_device
             packet = packet[info_length + 1:]
 
         return ParsedMessage(MessageType.SYNC.value, is_response, device_id, updated_device_data, version)
@@ -126,6 +129,7 @@ def _parse_device_status_pages_command(data_bytes: bytearray, device_list) -> di
 
     for i in range(device_count):
         device_data = trimmed_bytes[0:24]
+        trimmed_bytes = trimmed_bytes[24:]
 
         mesh_id = struct.unpack("<H", device_data[0:2])[0]
         is_online = device_data[3]
@@ -134,15 +138,21 @@ def _parse_device_status_pages_command(data_bytes: bytearray, device_list) -> di
         color_mode = device_data[16]
         rgb = (device_data[20], device_data[21], device_data[22])
 
-        try:
-            resolved_device: CyncDevice = next(device for device in device_list if device.isolated_mesh_id == mesh_id)
-            if DeviceType.is_light(resolved_device.device_type_id):
-                resolved_device.update_state(bool(is_on), brightness, color_mode, rgb, bool(is_online))
-        except StopIteration as ex:
-            raise ValueError("Unable to resolve device ID for mesh ID: {}".format(mesh_id)) from ex
+        resolved_device: CyncDevice = next(
+            (device for device in device_list if device.isolated_mesh_id == mesh_id), None)
+        if resolved_device is None:
+            # A mesh id we can't map to a known cloud device (e.g. a device
+            # removed from the account but still physically in the mesh, or a
+            # group/scene entry). Skip it rather than raising, which would
+            # discard the entire status page and leave every other device stuck
+            # at its last state - the root cause of "all lights unavailable"
+            # even though the cloud connection is healthy.
+            continue
+
+        if DeviceType.is_light(resolved_device.device_type_id):
+            resolved_device.update_state(bool(is_on), brightness, color_mode, rgb, bool(is_online))
 
         updated_device_data[resolved_device.device_id] = resolved_device
-        trimmed_bytes = trimmed_bytes[24:]
 
     return updated_device_data
 
