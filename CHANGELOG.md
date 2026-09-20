@@ -2,6 +2,14 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.4.1] - 2026-09-20
+
+### Added
+- **Message counters in the `mesh_query` diagnostics block.** Building on 1.4.0, diagnostics now also report `probe_responses`, `status_responses`, `sync_pushes`, `parse_error_count`, and `last_parse_error`. On a healthy-looking connection where devices are still unavailable and `probe_completed`/`hub_available` are both true with no `last_state_query_error`, these settle the last ambiguity:
+  - `status_responses: 0` **and** `parse_error_count: 0` → the cloud is accepting the connection but never answering the mesh state query. That is a **stale Cync account session**; re-authenticate (the new **Reconfigure** action, or the official Cync app). No integration change can make the cloud push state it is withholding.
+  - `parse_error_count` > 0 with `last_parse_error` set → the cloud **is** replying but the reply can't be decoded — a protocol gap in the parser, with the exact error captured for a fix.
+  - `status_responses` > 0 while devices are still offline → the mesh genuinely reports those devices offline.
+
 ## [1.4.0] - 2026-09-20
 
 ### Added
