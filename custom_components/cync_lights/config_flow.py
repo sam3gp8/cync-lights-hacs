@@ -59,9 +59,12 @@ class CyncLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._password: str | None = None
         self._auth: Auth | None = None
         self._session: aiohttp.ClientSession | None = None
-        # Set when we are re-authenticating an existing entry rather than
-        # creating a brand new one.
+        # Set when we are re-authenticating or reconfiguring an existing entry
+        # rather than creating a brand new one.
         self._reauth_entry: config_entries.ConfigEntry | None = None
+        # True when the flow was started by the user via "Reconfigure" (an
+        # on-demand re-login) rather than an automatic reauth.
+        self._is_reconfigure: bool = False
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -165,6 +168,57 @@ class CyncLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """User-initiated re-login, available on demand from the entry's menu.
+
+        Unlike reauth - which only fires when the stored credentials are
+        rejected - this lets the user force a fresh login and reload the entry
+        at any time, without deleting and re-adding the integration. A full
+        fresh login re-establishes the Cync cloud session and re-probes
+        devices, which can recover the "healthy connection but devices
+        unavailable" state (a stale account session) that a background token
+        refresh alone does not fix.
+        """
+        self._is_reconfigure = True
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._username = user_input[CONF_USERNAME]
+            self._password = user_input[CONF_PASSWORD]
+            self._session = async_get_clientsession(self.hass)
+            self._auth = Auth(
+                self._session, username=self._username, password=self._password
+            )
+
+            try:
+                user = await self._auth.login()
+            except TwoFactorRequiredError:
+                return await self.async_step_otp()
+            except AuthFailedError:
+                errors["base"] = "invalid_auth"
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Unexpected error during Cync reconfigure")
+                errors["base"] = "cannot_connect"
+            else:
+                return await self._async_finish(user)
+
+        if self._username is None and self._reauth_entry is not None:
+            self._username = self._reauth_entry.data.get(CONF_USERNAME)
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_USER_SCHEMA,
+                {CONF_USERNAME: self._username} if self._username else None,
+            ),
+            errors=errors,
+        )
+
     async def _async_finish(self, user) -> FlowResult:
         """Create a new entry, or update the existing one on reauth."""
         token_data = {
@@ -182,7 +236,11 @@ class CyncLightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self._reauth_entry is not None:
             self._abort_if_unique_id_mismatch(reason="wrong_account")
             return self.async_update_reload_and_abort(
-                self._reauth_entry, data=token_data
+                self._reauth_entry,
+                data=token_data,
+                reason="reconfigure_successful"
+                if self._is_reconfigure
+                else "reauth_successful",
             )
 
         self._abort_if_unique_id_configured()

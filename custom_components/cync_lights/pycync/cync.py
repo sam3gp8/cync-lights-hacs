@@ -29,6 +29,10 @@ class Cync:
             raise MissingAuthError("No logged in user exists on auth object.")
         self._auth = auth
         self._command_client = CommandClient(auth.user)
+        # Outcome of the most recent mesh state query, for diagnostics. The
+        # query runs detached, so this is the only place its result is visible
+        # without turning on debug logging.
+        self._last_state_query_error: str | None = None
 
     @classmethod
     async def create(cls, auth: Auth, ssl_context: ssl.SSLContext = None, ssl_context_no_verify: ssl.SSLContext = None):
@@ -61,21 +65,32 @@ class Cync:
         task = asyncio.create_task(self._command_client.update_mesh_devices())
         task.add_done_callback(self._log_state_query_result)
 
-    @staticmethod
-    def _log_state_query_result(task: "asyncio.Task") -> None:
+    def _log_state_query_result(self, task: "asyncio.Task") -> None:
         """Surface failures from the fire-and-forget mesh-state query.
 
         The query runs as a detached task, so without this its exceptions
         (e.g. NoHubConnectedError, or a timeout waiting on the mesh reply) are
         swallowed - the caller never learns the state refresh failed, and
-        devices silently stay "unavailable". Log it so the failure is visible.
+        devices silently stay "unavailable". Record and log it so the failure
+        is visible both in the log and in the diagnostics download.
         """
         try:
             task.result()
         except asyncio.CancelledError:
             pass
-        except Exception:  # noqa: BLE001 - detached task, log everything
+        except Exception as err:  # noqa: BLE001 - detached task, log everything
+            self._last_state_query_error = f"{type(err).__name__}: {err}"
             _LOGGER.warning("Failed to refresh Cync device states", exc_info=True)
+        else:
+            self._last_state_query_error = None
+
+    def diagnostics(self) -> dict:
+        """Return a snapshot of mesh-query health for the diagnostics download."""
+        return {
+            "probe_completed": self._command_client.probe_completed,
+            "hub_available": self._command_client.hub_available,
+            "last_state_query_error": self._last_state_query_error,
+        }
 
     def get_devices(self):
         """Get a flat list of devices associated with this user."""

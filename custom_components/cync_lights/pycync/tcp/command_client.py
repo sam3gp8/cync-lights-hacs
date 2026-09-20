@@ -24,6 +24,14 @@ if TYPE_CHECKING:
     from pycync.devices.groups import CyncHome
 
 
+# How long to wait for the initial device probe to report at least one
+# Wi-Fi-connected device before giving up on a mesh state query. Without a
+# bound here the query task waits forever - silently - when the Cync server
+# accepts the login but never sends probe responses (e.g. a stale account
+# session), which leaves every device stuck "unavailable" with nothing logged.
+HUB_PROBE_TIMEOUT_SECONDS = 15
+
+
 class CommandClient:
     _LOGGER = logging.getLogger(__name__)
 
@@ -32,6 +40,23 @@ class CommandClient:
 
         self._device_statuses_updated = False
         self._tcp_manager: TcpManager = None
+
+    @property
+    def probe_completed(self) -> bool:
+        """True once at least one device has answered the initial probe."""
+        return self._device_statuses_updated
+
+    @property
+    def hub_available(self) -> bool:
+        """True if any known device can currently act as a Wi-Fi mesh proxy.
+
+        This is what a mesh state query needs; when it is False the account has
+        no reachable bridge and every mesh device will read as unavailable.
+        """
+        return any(
+            device.wifi_connected and CyncCapability.CAN_ACT_AS_WIFI_PROXY in device.capabilities
+            for device in device_storage.get_flattened_devices(self._user.user_id)
+        )
 
     def start_connection(self, ssl_context: ssl.SSLContext = None, ssl_context_no_verify: ssl.SSLContext = None):
         self._tcp_manager = TcpManager(self._user, self.on_message_received, ssl_context, ssl_context_no_verify)
@@ -126,13 +151,23 @@ class CommandClient:
         A hub device is a device that is actively connected to Wi-Fi, and can act as a proxy into the Bluetooth mesh.
         """
 
+        waited = 0
         while not self._device_statuses_updated:
+            if waited >= HUB_PROBE_TIMEOUT_SECONDS:
+                raise NoHubConnectedError(
+                    "No device answered the initial probe within "
+                    f"{HUB_PROBE_TIMEOUT_SECONDS}s - the Cync server accepted the "
+                    "login but is not reporting any online devices. This is "
+                    "usually a stale Cync account session; re-authenticate the "
+                    "official Cync app to refresh it.")
             await asyncio.sleep(1)
+            waited += 1
             self._LOGGER.debug("Awaiting probe initialization before fetching hub.")
 
         hub_device = next((device for device in home.get_flattened_device_list() if
                            device.wifi_connected and CyncCapability.CAN_ACT_AS_WIFI_PROXY in device.capabilities), None)
         if hub_device is None:
-            raise NoHubConnectedError
+            raise NoHubConnectedError(
+                "No Wi-Fi-connected device in this home can act as a mesh proxy.")
 
         return hub_device

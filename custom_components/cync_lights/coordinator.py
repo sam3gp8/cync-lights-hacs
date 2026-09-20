@@ -586,6 +586,18 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
 
         online = sum(1 for d in self.devices.values() if d.online)
 
+        # Mesh-query health: pinpoints why devices read "unavailable" even when
+        # the socket is connected. If probe_completed/hub_available are False or
+        # last_state_query_error is set, the cloud is not answering the state
+        # query - typically a stale Cync account session (re-auth the Cync app),
+        # not something the integration can fix.
+        mesh_query: dict[str, Any] = {}
+        if self._cync is not None:
+            try:
+                mesh_query = self._cync.diagnostics()
+            except Exception as err:  # noqa: BLE001 - diagnostics must never raise
+                mesh_query = {"error": f"{type(err).__name__}: {err}"}
+
         devices = []
         for st in self.devices.values():
             devices.append(
@@ -622,6 +634,7 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
                 else None,
                 "last_update_success": self.last_update_success,
             },
+            "mesh_query": mesh_query,
             "local_control": {
                 "enabled": self.local_enabled,
                 "server_running": self._local_server is not None,
