@@ -41,6 +41,10 @@ from .const import (
     CONF_ADGUARD_URL,
     CONF_ADGUARD_USERNAME,
     CONF_ADGUARD_PASSWORD,
+    CONF_ENABLE_DNS,
+    CONF_DNS_UPSTREAM,
+    DEFAULT_DNS_UPSTREAM,
+    CYNC_DEVICE_HOST,
     LOCAL_SERVER_PORT,
 )
 from .pycync.auth import Auth, AuthFailedError
@@ -51,6 +55,7 @@ from .pycync.devices.capabilities import CyncCapability
 from .adguard import AdGuardClient, AdGuardError
 from .cert import ensure_certificate
 from .local_server import CyncLocalServer
+from .dns_server import CyncDnsServer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -124,6 +129,7 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
 
         # Local control (optional).
         self._local_server: Optional[CyncLocalServer] = None
+        self._dns_server: Optional[CyncDnsServer] = None
         self._adguard: Optional[AdGuardClient] = None
         # mesh_id/switch_id -> hub switch_id that owns the local connection,
         # populated as devices connect to the local server.
@@ -270,8 +276,33 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
                 self._local_server = None
                 return
 
-        # Optionally manage the AdGuard DNS rewrite so devices reach us.
-        if opts.get(CONF_MANAGE_ADGUARD) and opts.get(CONF_ADGUARD_URL) and host_ip:
+        # Get devices pointed at us, by one of three means (in priority order).
+        if opts.get(CONF_ENABLE_DNS) and host_ip:
+            # 1. The integration's own DNS server - no external add-on needed.
+            self._dns_server = CyncDnsServer(
+                host_ip=host_ip,
+                answer_ip=host_ip,
+                hostnames=[CYNC_DEVICE_HOST],
+                upstream=opts.get(CONF_DNS_UPSTREAM) or DEFAULT_DNS_UPSTREAM,
+            )
+            try:
+                await self._dns_server.start()
+                _LOGGER.info(
+                    "Built-in DNS server active. Set your router/DHCP to hand out "
+                    "%s as the DNS server for your Cync devices so they resolve "
+                    "%s to Home Assistant.",
+                    host_ip,
+                    CYNC_DEVICE_HOST,
+                )
+            except Exception as err:  # noqa: BLE001 - never break cloud on a bind failure
+                _LOGGER.error(
+                    "Could not start built-in DNS server on %s:53 (%s). Port 53 may "
+                    "be in use; use AdGuard/another DNS to point %s at %s instead.",
+                    host_ip, err, CYNC_DEVICE_HOST, host_ip,
+                )
+                self._dns_server = None
+        elif opts.get(CONF_MANAGE_ADGUARD) and opts.get(CONF_ADGUARD_URL) and host_ip:
+            # 2. Automatically manage an AdGuard Home rewrite.
             session = async_get_clientsession(self.hass)
             self._adguard = AdGuardClient(
                 session,
@@ -283,11 +314,13 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
                 await self._adguard.async_set_cync_rewrite(host_ip)
             except AdGuardError as err:
                 _LOGGER.error("Could not set AdGuard rewrite: %s", err)
-        elif self.local_enabled and not opts.get(CONF_MANAGE_ADGUARD):
+        elif self.local_enabled:
+            # 3. The user points DNS at us themselves.
             _LOGGER.info(
-                "Local server running on :%d. Point cm.gelighting.com at %s in "
-                "your DNS for devices to connect locally.",
+                "Local server running on :%d. Point %s at %s in your DNS for "
+                "devices to connect locally.",
                 LOCAL_SERVER_PORT,
+                CYNC_DEVICE_HOST,
                 host_ip or "this host",
             )
 
@@ -364,6 +397,12 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("Error clearing AdGuard rewrite: %s", err)
             self._adguard = None
+        if self._dns_server is not None:
+            try:
+                await self._dns_server.stop()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Error stopping built-in DNS server: %s", err)
+            self._dns_server = None
         if self._local_server is not None:
             try:
                 await self._local_server.stop()
@@ -653,6 +692,8 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
             "local_control": {
                 "enabled": self.local_enabled,
                 "server_running": self._local_server is not None,
+                "dns_server_running": self._dns_server is not None
+                and self._dns_server.running,
                 "locally_connected_device_ids": (
                     self._local_server.connected_device_ids
                     if self._local_server is not None

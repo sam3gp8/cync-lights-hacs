@@ -23,6 +23,9 @@ from .const import (
     CONF_ADGUARD_URL,
     CONF_ADGUARD_USERNAME,
     CONF_ADGUARD_PASSWORD,
+    CONF_ENABLE_DNS,
+    CONF_DNS_UPSTREAM,
+    DEFAULT_DNS_UPSTREAM,
 )
 from .adguard import AdGuardClient, AdGuardError, AdGuardAuthError
 from .pycync.auth import Auth, TwoFactorRequiredError, AuthFailedError
@@ -286,6 +289,14 @@ class CyncLightsOptionsFlow(config_entries.OptionsFlow):
             if user_input.get(CONF_ENABLE_LOCAL) and not user_input.get(CONF_HOST_IP):
                 errors["base"] = "host_ip_required"
 
+            # The built-in DNS server only helps if the local server is running
+            # (it redirects devices to it) and needs HA's IP to answer with.
+            if user_input.get(CONF_ENABLE_DNS):
+                if not user_input.get(CONF_ENABLE_LOCAL):
+                    errors["base"] = "dns_needs_local"
+                elif not user_input.get(CONF_HOST_IP):
+                    errors["base"] = "host_ip_required"
+
             if not errors:
                 return self.async_create_entry(title="", data=user_input)
 
@@ -302,6 +313,14 @@ class CyncLightsOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_HOST_IP,
                     default=opts.get(CONF_HOST_IP, ""),
+                ): str,
+                vol.Required(
+                    CONF_ENABLE_DNS,
+                    default=opts.get(CONF_ENABLE_DNS, False),
+                ): bool,
+                vol.Optional(
+                    CONF_DNS_UPSTREAM,
+                    default=opts.get(CONF_DNS_UPSTREAM, DEFAULT_DNS_UPSTREAM),
                 ): str,
                 vol.Required(
                     CONF_MANAGE_ADGUARD,
