@@ -34,6 +34,7 @@ from .const import (
     TOKEN_REFRESH_MARGIN,
     PLUG_TYPE_IDS,
     FAN_TYPE_IDS,
+    CONF_ASSUME_AVAILABLE,
     CONF_ENABLE_LOCAL,
     CONF_HOST_IP,
     CONF_MANAGE_ADGUARD,
@@ -131,6 +132,17 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
     @property
     def local_enabled(self) -> bool:
         return bool(self.entry.options.get(CONF_ENABLE_LOCAL))
+
+    @property
+    def assume_available(self) -> bool:
+        """When set, keep entities available while the cloud connection is up.
+
+        Bypasses the per-device online flag, which some hardware (e.g. Gen1
+        Wi-Fi wall switches) never populates because it doesn't answer the mesh
+        status query - leaving it stuck "unavailable" in HA even though it is
+        online and controllable in the Cync app.
+        """
+        return bool(self.entry.options.get(CONF_ASSUME_AVAILABLE))
 
     # -- Connection lifecycle ------------------------------------------------
 
@@ -635,6 +647,9 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
                 "last_update_success": self.last_update_success,
             },
             "mesh_query": mesh_query,
+            "options": {
+                "assume_available": self.assume_available,
+            },
             "local_control": {
                 "enabled": self.local_enabled,
                 "server_running": self._local_server is not None,
