@@ -16,6 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import (
     DOMAIN,
     CONF_OTP,
+    CONF_ASSUME_AVAILABLE,
     CONF_ENABLE_LOCAL,
     CONF_HOST_IP,
     CONF_MANAGE_ADGUARD,
@@ -290,6 +291,10 @@ class CyncLightsOptionsFlow(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
+                vol.Required(
+                    CONF_ASSUME_AVAILABLE,
+                    default=opts.get(CONF_ASSUME_AVAILABLE, False),
+                ): bool,
                 vol.Required(
                     CONF_ENABLE_LOCAL,
                     default=opts.get(CONF_ENABLE_LOCAL, False),

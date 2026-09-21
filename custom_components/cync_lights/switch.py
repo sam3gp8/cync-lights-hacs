@@ -64,11 +64,13 @@ class CyncSwitchEntity(CoordinatorEntity[CyncCoordinator], SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        return self._state.online and self._state.power
+        return (self.coordinator.assume_available or self._state.online) and self._state.power
 
     @property
     def available(self) -> bool:
-        return self.coordinator.last_update_success and self._state.online
+        return self.coordinator.last_update_success and (
+            self.coordinator.assume_available or self._state.online
+        )
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         pd = self._state.pycync_dev

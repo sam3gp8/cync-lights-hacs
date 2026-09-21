@@ -9,6 +9,14 @@ CONF_OTP = "otp"
 # When enabled, the integration runs a local TLS server impersonating
 # cm.gelighting.com and (optionally) manages an AdGuard Home DNS rewrite so
 # physical devices connect to Home Assistant instead of the Cync cloud.
+# When set, entities stay available (controllable) whenever the cloud
+# connection is healthy, instead of being gated on each device's reported
+# online flag. Some hardware (e.g. Gen1 Wi-Fi wall switches) is controllable
+# through the cloud/hub and shown online in the Cync app, yet never answers the
+# mesh status query the integration uses to learn online state - so it reads as
+# permanently "unavailable" in HA. This option makes those devices usable.
+CONF_ASSUME_AVAILABLE = "assume_available"
+
 CONF_ENABLE_LOCAL = "enable_local"
 CONF_HOST_IP = "host_ip"                # HA's LAN IP that devices should reach
 CONF_MANAGE_ADGUARD = "manage_adguard"  # let the integration set the DNS rewrite

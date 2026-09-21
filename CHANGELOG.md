@@ -2,6 +2,14 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.5.0] - 2026-09-21
+
+### Added
+- **"Assume available" option** (Settings → Devices & Services → Cync Lights → Configure). When enabled, entities stay available and controllable whenever the cloud connection is healthy, instead of being gated on each device's reported online flag. This unblocks hardware that is online and controllable in the Cync app but that Home Assistant shows as permanently "unavailable" — confirmed via the 1.4.1 diagnostics on a real account: `sync_pushes` flowing (the cloud session is alive and pushing) but `status_responses: 0` (the mesh status query the integration relies on to learn per-device online state is never answered for these Gen1 Wi‑Fi wall switches, type 52). Commands from Home Assistant use the same cloud/hub path the app uses, so with this option on those switches become usable. Default off, so setups where online reporting works are unchanged. The option's state is included in the diagnostics download (`options.assume_available`).
+
+### Note
+This is an opt-in workaround, not a fix for the underlying gap: for these devices the Cync cloud does not answer the bulk status query (while it does deliver live `SYNC` pushes and accepts commands), so the integration cannot learn their true online/on state and reports on/off optimistically. Root-causing why the status query goes unanswered needs a packet capture against this hardware.
+
 ## [1.4.1] - 2026-09-20
 
 ### Added
