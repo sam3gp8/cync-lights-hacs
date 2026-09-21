@@ -24,6 +24,18 @@ CONF_ADGUARD_URL = "adguard_url"
 CONF_ADGUARD_USERNAME = "adguard_username"
 CONF_ADGUARD_PASSWORD = "adguard_password"
 
+# Built-in DNS server: instead of AdGuard/Pi-hole/router, the integration can run
+# its own DNS server that answers the Cync host with HA's IP and forwards every
+# other query upstream. The user still points their DHCP/router at HA as the DNS
+# server for the Cync devices - HA can only answer queries that reach it.
+CONF_ENABLE_DNS = "enable_dns"
+CONF_DNS_UPSTREAM = "dns_upstream"
+DEFAULT_DNS_UPSTREAM = "1.1.1.1"
+
+# Hostname the Cync devices dial out to; the redirect (AdGuard rewrite or the
+# built-in DNS server) points this at the Home Assistant host.
+CYNC_DEVICE_HOST = "cm.gelighting.com"
+
 LOCAL_SERVER_PORT = 23779
 
 PLATFORMS = [Platform.LIGHT, Platform.SWITCH, Platform.FAN]

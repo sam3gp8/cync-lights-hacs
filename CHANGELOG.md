@@ -2,6 +2,15 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.6.0] - 2026-09-21
+
+### Added
+- **Built-in DNS server for local control — no AdGuard/Pi-hole/router rewrite needed.** A new option (Configure → **"Run a built-in DNS server"**) makes the integration answer `cm.gelighting.com` with the Home Assistant host's IP and forward every other lookup to an upstream resolver (configurable, default `1.1.1.1`). With it on, physical Cync devices connect to the local server without any external DNS add-on or hand-edited rewrite.
+  - Listens on UDP **and** TCP port 53 on the Home Assistant IP. If the port can't be bound (already in use, permission, bridged network) the failure is logged and the cloud connection is unaffected — it never tears down the integration.
+  - Requires **local control** enabled and the Home Assistant **IP address** set (validated in the options flow); takes priority over the AdGuard option when both are on.
+  - **One network step is still required and cannot be automated:** point your router/DHCP at the Home Assistant host as the DNS server for your Cync devices (ideally scoped to their subnet/VLAN) — Home Assistant can only answer queries that are actually sent to it. Diagnostics report `local_control.dns_server_running`.
+  - New module `dns_server.py`; new options `enable_dns` and `dns_upstream`.
+
 ## [1.5.0] - 2026-09-21
 
 ### Added
