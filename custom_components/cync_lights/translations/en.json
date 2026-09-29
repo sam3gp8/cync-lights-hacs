@@ -19,7 +19,7 @@
       },
       "otp": {
         "title": "Two-factor code",
-        "description": "Cync emailed you a one-time code. Enter it below.",
+        "description": "Cync emailed you a one-time code - enter it below. Note: Cync sends this code even when the password is wrong, so if the code keeps being rejected your Cync password has most likely changed or expired - go back and re-enter it.",
         "data": {
           "otp": "One-time code"
         }
@@ -35,7 +35,7 @@
     },
     "error": {
       "invalid_auth": "Invalid email or password.",
-      "invalid_otp": "That code didn't work. Check your email and try again.",
+      "invalid_otp": "Sign-in failed. Re-check the code - but Cync also emails a code when the password is wrong, so if it keeps failing your Cync password has most likely changed or expired. Go back and re-enter your password.",
       "cannot_connect": "Could not reach the Cync cloud. Please try again."
     },
     "abort": {

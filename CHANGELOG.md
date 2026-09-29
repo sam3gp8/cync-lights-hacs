@@ -2,6 +2,11 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.6.1] - 2026-09-29
+
+### Fixed
+- **Misleading "invalid two-factor code" when the real problem is the password.** Cync's login endpoint returns the same `400` whether a two-factor code is genuinely required or the password is simply wrong/expired, and it emails a 2FA code either way. The flow always read that `400` as "two-factor required," so a changed/expired Cync password would send a code, prompt for it, and then fail as if the *code* were wrong — sending people to re-request codes that could never work (see #6, self-diagnosed by the reporter). The OTP step description and the `invalid_otp` error now say plainly that a code which keeps failing most likely means the password has changed or expired, and to go back and re-enter it. Strings-only change; no behavior change to the auth flow itself (Cync's API doesn't distinguish the two cases, so the guidance is the fix).
+
 ## [1.6.0] - 2026-09-21
 
 ### Added
