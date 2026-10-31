@@ -130,6 +130,13 @@ class CyncLightEntity(CoordinatorEntity[CyncCoordinator], LightEntity):
 
         if ATTR_BRIGHTNESS in kwargs and self._state.supports_brightness and is_light:
             pct = max(1, min(100, round(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
+            # A brightness command on its own leaves an off Cync bulb off (dimmer
+            # switches wake up, bulbs don't), so switch it on first, as the app does.
+            if not self._state.power:
+                if local and srv:
+                    srv.set_power(local[0], local[1], True)
+                else:
+                    await pd.turn_on()
             if local and srv:
                 srv.set_brightness(local[0], local[1], pct)
             else:
