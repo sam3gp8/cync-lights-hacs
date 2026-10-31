@@ -277,12 +277,16 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
                 return
 
         # Get devices pointed at us, by one of three means (in priority order).
-        if opts.get(CONF_ENABLE_DNS) and host_ip:
+        if opts.get(CONF_ENABLE_DNS) and host_ip and self._dns_server is not None:
+            # Already running from the first connect; a reconnect must not rebind port 53.
+            pass
+        elif opts.get(CONF_ENABLE_DNS) and host_ip:
             # 1. The integration's own DNS server - no external add-on needed.
             self._dns_server = CyncDnsServer(
                 host_ip=host_ip,
                 answer_ip=host_ip,
-                hostnames=[CYNC_DEVICE_HOST],
+                # Newer firmware asks for cm-sec.gelighting.com, older for cm-ge.xlink.cn.
+                hostnames=[CYNC_DEVICE_HOST, "cm-sec.gelighting.com", "cm-ge.xlink.cn"],
                 upstream=opts.get(CONF_DNS_UPSTREAM) or DEFAULT_DNS_UPSTREAM,
             )
             try:
@@ -338,18 +342,13 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
     ) -> None:
         """State update coming from a directly-connected local device."""
         self._last_push = time.monotonic()
-        if hub_id is not None and mesh_id is not None:
-            self._local_hub_for[mesh_id] = hub_id
-
-        # Match by switch_id first (WiFi devices), then mesh id.
-        st = self.devices.get(mesh_id)
-        if st is None:
-            for cand in self.devices.values():
-                if cand.switch_id == mesh_id:
-                    st = cand
-                    break
+        # PIPE records carry the small per-home mesh id (the
+        # pycync device's mesh_reference_id), not the 32-bit cloud device id.
+        st = self._device_for_mesh_id(mesh_id)
         if st is None:
             return
+        if hub_id is not None:
+            self._local_hub_for[st.switch_id] = hub_id
 
         now = time.monotonic()
         changed = st.online != is_online or st.power != is_on or st.brightness != brightness
@@ -426,13 +425,36 @@ class CyncCoordinator(DataUpdateCoordinator[dict[int, CyncDeviceState]]):
         connected = set(self._local_server.connected_device_ids)
         if not connected:
             return None
+        # The PIPE command carries the small per-home mesh id
+        # (2 bytes), exactly what the cloud path sends - never the cloud device id.
+        st = self.devices.get(switch_id)
+        mesh_ref = (
+            getattr(st.pycync_dev, "mesh_reference_id", None) if st is not None else None
+        )
+        if mesh_ref is None:
+            return None
         # Direct WiFi device connected to us.
         if switch_id in connected:
-            return (switch_id, switch_id)
-        # Mesh device behind a locally-connected hub.
+            return (switch_id, mesh_ref)
+        # Mesh device behind the hub that last reported it.
         hub = self._local_hub_for.get(switch_id)
         if hub is not None and hub in connected:
-            return (hub, switch_id)
+            return (hub, mesh_ref)
+        # Otherwise any locally-connected WiFi device can relay into the
+        # Bluetooth mesh, which is what the cloud does with its hub device.
+        return (sorted(connected)[0], mesh_ref)
+
+    def _device_for_mesh_id(self, mesh_id: int) -> Optional[CyncDeviceState]:
+        """Map a per-home mesh id from a local PIPE record to our device."""
+        for cand in self.devices.values():
+            if getattr(cand.pycync_dev, "mesh_reference_id", None) == mesh_id:
+                return cand
+        st = self.devices.get(mesh_id)
+        if st is not None:
+            return st
+        for cand in self.devices.values():
+            if cand.switch_id == mesh_id:
+                return cand
         return None
 
     @property
