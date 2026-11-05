@@ -2,6 +2,17 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
+## [1.7.0] - 2026-11-05
+
+Local control now works on real hardware, thanks to [@ForkAndSpooner](https://github.com/ForkAndSpooner) (#8), who tested against ~50 devices. Also documents local control in the README, including that the Home Assistant host must use a direct upstream resolver rather than the integration's own DNS server.
+
+### Fixed
+- **Local control never worked on real hardware - three causes, found with ~50 Cync devices (bulbs type 169/153, dimmers type 36/37) on a single home.**
+  - **Devices never connected: current firmware asks DNS for `cm-sec.gelighting.com`.** The built-in DNS server only answered `cm.gelighting.com`, so every device resolved the secure host through the real resolver and went straight back to the cloud after a power cycle. The DNS server now also answers `cm-sec.gelighting.com` and the legacy `cm-ge.xlink.cn`. Note for anyone running this: the Home Assistant host itself must *not* resolve through that DNS server, because the cloud client in `pycync` connects to `cm-sec.gelighting.com` too - give the host a direct upstream resolver (Settings -> System -> Network) and point only the router/DHCP at it.
+  - **Every local command failed with `int too big to convert`.** `local_command_target()` returned the 32-bit cloud device id as the mesh id, but the PIPE command packs the per-home mesh id into 2 bytes (the cloud path sends `mesh_reference_id`). Commands and incoming PIPE status records are now keyed by `pycync_dev.mesh_reference_id`, matching the cloud path; a device that is not itself connected is reached through any locally connected WiFi device, as the cloud does with its hub device. With this, 20-25 devices stayed connected locally and reported state back within 0.3-2 s.
+  - **A cloud reconnect started a second DNS server on port 53.** The first one kept the port and the coordinator lost its handle (`dns_server_running: false` in diagnostics while queries were still being answered, and `Address in use` in the log). A reconnect now leaves a running DNS server alone.
+- **A brightness command alone did not wake an off bulb.** Moving a slider up from 0 sends `turn_on` with `brightness`, which became a bare `set_brightness`; Cync dimmer switches wake up on that, bulbs do not (they store the level and stay off). When the device is off, `turn_on` now sends power-on before the level, the same sequence the Cync app uses. Applies to the cloud and the local path.
+
 ## [1.6.1] - 2026-09-29
 
 ### Fixed
