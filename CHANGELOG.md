@@ -2,7 +2,9 @@
 
 All notable changes to this integration are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH — patch for fixes, minor for new features, major for breaking changes).
 
-## [Unreleased]
+## [1.7.0] - 2026-11-05
+
+Local control now works on real hardware, thanks to [@ForkAndSpooner](https://github.com/ForkAndSpooner) (#8), who tested against ~50 devices. Also documents local control in the README, including that the Home Assistant host must use a direct upstream resolver rather than the integration's own DNS server.
 
 ### Fixed
 - **Local control never worked on real hardware - three causes, found with ~50 Cync devices (bulbs type 169/153, dimmers type 36/37) on a single home.**

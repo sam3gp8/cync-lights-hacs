@@ -51,9 +51,24 @@ Click the badge above (must be opened from a browser on the same network as your
 
 This integration creates one entity per device. For multi-device control (e.g. "all kitchen lights"), use Home Assistant's built-in **Areas** or the **Light Group** / **Switch Group** helpers (Settings → Devices & Services → Helpers → Create Helper) rather than a custom grouping feature — it integrates better with the rest of Home Assistant (scripts, automations, voice assistants).
 
+## Local control (optional, experimental)
+
+By default the integration talks to the Cync cloud. It can optionally run a **local server** that physical Cync devices connect to instead, so commands keep working without internet. Enable it under **Settings → Devices & Services → Cync Lights → Configure**.
+
+For devices to reach the local server, the hostname they dial (`cm-sec.gelighting.com`) has to resolve to the Home Assistant host. You can do that three ways:
+
+- **Built-in DNS server** (no add-on needed) — tick *Run a built-in DNS server* and set the Home Assistant IP, then point your **router/DHCP at the Home Assistant host as the DNS server** for the Cync devices (ideally scoped to their subnet/VLAN). Home Assistant can only answer queries that are actually sent to it.
+- **AdGuard Home** — let the integration manage the rewrite automatically (enter your AdGuard URL/credentials).
+- **Your own DNS** — point `cm-sec.gelighting.com` (and `cm.gelighting.com`) at the Home Assistant host in whatever resolver you run.
+
+> **Important:** the cloud client inside the integration *also* connects to `cm-sec.gelighting.com`, so the **Home Assistant host itself must use a direct upstream resolver** (Settings → System → Network → DNS), **not** the integration's built-in DNS server. Point only the devices (via your router/DHCP) at Home Assistant for DNS — if the HA host resolves `cm-sec` to itself, its next cloud reconnect lands on the local server.
+
+Local control is experimental: devices farther from your access points may drop in and out of the local connection. The cloud connection keeps working regardless, and the feature is entirely opt-in.
+
 ## Known limitations
 
-- Requires an internet connection — this connects to the Cync cloud rather than controlling devices purely on the local network. (This matches how the official Cync app and other community integrations like cync-lan operate.)
+- By default this connects to the Cync cloud rather than controlling devices purely on the local network (this matches how the official Cync app and other community integrations like cync-lan operate). See **Local control** above for the experimental offline path.
+- Dimmable/color features depend entirely on what your specific Cync device model supports; plain on/off switches will only expose an on/off control.
 - Dimmable/color features depend entirely on what your specific Cync device model supports; plain on/off switches will only expose an on/off control.
 
 ## Troubleshooting
